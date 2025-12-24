@@ -4,16 +4,26 @@
   const STORAGE_KEY = 'ibd_selectedImages_v1';
   const ATTR_SELECTED = 'data-ibd-selected';
   const ENABLED_KEY = 'ibd_enabled_v1';
-  const QUALITY_KEY = 'ibd_jpegQuality_v1';
+  const LOW_PERF_KEY = 'ibd_lowPerf_v1';
+  const PREVIEW_KEY = 'ibd_previews_v1';
+  const OVERLAY_KEY = 'ibd_overlays_v1';
+  const MAX_SELECT_KEY = 'ibd_maxSelection_v1';
 
   const BADGE_ATTR = 'data-ibd-badge';
   const TOOLBAR_ID = 'ibd-toolbar-v1';
 
+  let settingsCache = {
+    enabled: false,
+    lowPerf: false,
+    previews: true,
+    overlays: true,
+    maxSelection: 50
+  };
+
   function normalizeUrl(url) {
     if (!url) return null;
     const trimmed = String(url).trim();
-    if (!trimmed) return null;
-    return trimmed;
+    return trimmed || null;
   }
 
   function resolveUrl(maybeUrl) {
@@ -26,164 +36,76 @@
     }
   }
 
-  function parseSrcset(srcset) {
-    const input = normalizeUrl(srcset);
-    if (!input) return [];
-
-    const parts = input
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean);
-
-    const out = [];
-    for (const part of parts) {
-      const tokens = part.split(/\s+/).filter(Boolean);
-      if (!tokens.length) continue;
+  function pickBestSrcsetUrl(srcset) {
+    if (!srcset) return null;
+    const parts = srcset.split(',').map(p => p.trim()).filter(Boolean);
+    const parsed = parts.map(part => {
+      const tokens = part.split(/\s+/);
       const url = resolveUrl(tokens[0]);
-      if (!url) continue;
-
       let score = 0;
-      const descriptor = tokens[1];
-      if (descriptor) {
-        const mW = /^([0-9]+)w$/i.exec(descriptor);
-        const mX = /^([0-9]*\.?[0-9]+)x$/i.exec(descriptor);
+      if (tokens[1]) {
+        const mW = /^([0-9]+)w$/i.exec(tokens[1]);
+        const mX = /^([0-9]*\.?[0-9]+)x$/i.exec(tokens[1]);
         if (mW) score = Number(mW[1]) || 0;
         if (mX) score = (Number(mX[1]) || 0) * 10000;
       }
+      return { url, score };
+    }).filter(p => p.url);
 
-      out.push({ url, score });
-    }
-
-    return out;
-  }
-
-  function pickBestSrcsetUrl(srcset) {
-    const parsed = parseSrcset(srcset);
     if (!parsed.length) return null;
-    parsed.sort((a, b) => b.score - a.score);
-    return parsed[0].url;
-  }
-
-  function extractUrlsFromBackgroundImage(bgValue) {
-    const v = normalizeUrl(bgValue);
-    if (!v || v === 'none') return [];
-
-    const urls = [];
-    const re = /url\((['"]?)(.*?)\1\)/gi;
-    let m;
-    while ((m = re.exec(v))) {
-      const candidate = resolveUrl(m[2]);
-      if (candidate) urls.push(candidate);
-    }
-    return urls;
+    return parsed.sort((a, b) => b.score - a.score)[0].url;
   }
 
   function extractUrlFromBackgroundImage(bgValue) {
-    const urls = extractUrlsFromBackgroundImage(bgValue);
-    return urls.length ? urls[0] : null;
-  }
-
-  function getBestPictureSourceUrl(imgEl) {
-    const picture = imgEl && imgEl.closest ? imgEl.closest('picture') : null;
-    if (!picture) return null;
-
-    const sources = Array.from(picture.querySelectorAll('source'));
-    for (const source of sources) {
-      const srcset = source.getAttribute('srcset') || source.getAttribute('data-srcset');
-      const best = pickBestSrcsetUrl(srcset);
-      if (best) return best;
-    }
-
-    return null;
+    if (!bgValue || bgValue === 'none') return null;
+    const m = /url\((['"]?)(.*?)\1\)/i.exec(bgValue);
+    return m ? resolveUrl(m[2]) : null;
   }
 
   function getCandidateImgUrl(imgEl) {
     if (!imgEl) return null;
 
-    const pictureBest = getBestPictureSourceUrl(imgEl);
-    if (pictureBest) return pictureBest;
+    // Check picture element first
+    const picture = imgEl.closest('picture');
+    if (picture) {
+      const source = picture.querySelector('source');
+      if (source) {
+        const url = pickBestSrcsetUrl(source.getAttribute('srcset') || source.getAttribute('data-srcset'));
+        if (url) return url;
+      }
+    }
 
-    const srcsetBest = pickBestSrcsetUrl(imgEl.getAttribute('srcset') || imgEl.getAttribute('data-srcset'));
+    const srcset = imgEl.getAttribute('srcset') || imgEl.getAttribute('data-srcset');
+    const srcsetBest = pickBestSrcsetUrl(srcset);
     if (srcsetBest) return srcsetBest;
 
     const candidates = [
-      resolveUrl(imgEl.currentSrc),
-      resolveUrl(imgEl.src),
-      imgEl.getAttribute('src'),
-      imgEl.getAttribute('data-src'),
-      imgEl.getAttribute('data-original'),
-      imgEl.getAttribute('data-lazy-src'),
-      imgEl.getAttribute('data-zoom-image'),
-      imgEl.getAttribute('data-hires'),
-      imgEl.getAttribute('data-full'),
+      imgEl.currentSrc, imgEl.src,
+      imgEl.getAttribute('src'), imgEl.getAttribute('data-src'),
+      imgEl.getAttribute('data-original'), imgEl.getAttribute('data-lazy-src')
     ];
 
     for (const c of candidates) {
-      const normalized = resolveUrl(c);
-      if (normalized) return normalized;
+      const norm = resolveUrl(c);
+      if (norm) return norm;
     }
-
-    return null;
-  }
-
-  function getClickableImageUrlFromEvent(event) {
-    const target = event.target;
-    if (!(target instanceof Element)) return null;
-
-    const img = target.closest('img');
-    if (img) {
-      return getCandidateImgUrl(img);
-    }
-
-    const el = target.closest('*');
-    if (!el) return null;
-
-    const style = window.getComputedStyle(el);
-    const bgUrl = extractUrlFromBackgroundImage(style.backgroundImage);
-    if (bgUrl) return bgUrl;
-
-    return null;
-  }
-
-  function getClickableElementFromEvent(event) {
-    const target = event.target;
-    if (!(target instanceof Element)) return null;
-
-    const img = target.closest('img');
-    if (img) return img;
-
-    const el = target.closest('*');
-    if (!el) return null;
-
-    const style = window.getComputedStyle(el);
-    const bgUrl = extractUrlFromBackgroundImage(style.backgroundImage);
-    if (bgUrl) return el;
-
     return null;
   }
 
   async function getSelection() {
     const result = await api.storage.local.get(STORAGE_KEY);
-    const arr = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-    return arr.filter(Boolean);
+    return Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
   }
 
   async function setSelection(urls) {
-    const unique = Array.from(new Set(urls.filter(Boolean)));
+    const unique = Array.from(new Set(urls.filter(Boolean))).slice(0, settingsCache.maxSelection);
     await api.storage.local.set({ [STORAGE_KEY]: unique });
     return unique;
   }
 
-  async function getQuality() {
-    const stored = await api.storage.local.get(QUALITY_KEY);
-    const q = Number(stored[QUALITY_KEY]);
-    if (!Number.isFinite(q)) return 90;
-    return Math.min(100, Math.max(10, Math.round(q)));
-  }
-
   function ensureBadge(el) {
-    if (!(el instanceof Element)) return;
-    if (el.querySelector(`span[${BADGE_ATTR}]`)) return;
+    if (settingsCache.lowPerf || !settingsCache.overlays) return;
+    if (!(el instanceof Element) || el.querySelector(`span[${BADGE_ATTR}]`)) return;
 
     const badge = document.createElement('span');
     badge.setAttribute(BADGE_ATTR, '1');
@@ -197,336 +119,208 @@
     if (b) b.remove();
   }
 
-  function getBadgeHostForElement(el) {
-    if (!(el instanceof Element)) return null;
-
-    if (el.tagName && el.tagName.toLowerCase() === 'img') {
-      const parent = el.parentElement;
-      if (!parent) return null;
-      if (parent === document.body || parent === document.documentElement) return null;
-      return parent;
-    }
-
-    return el;
-  }
-
   function updateToolbarCount(count) {
     const toolbar = document.getElementById(TOOLBAR_ID);
     if (!toolbar) return;
     const countEl = toolbar.querySelector('[data-ibd-count]');
     if (countEl) countEl.textContent = String(count);
-    const downloadBtn = toolbar.querySelector('[data-ibd-download]');
-    if (downloadBtn) downloadBtn.disabled = count === 0;
+    const dlBtn = toolbar.querySelector('[data-ibd-download]');
+    if (dlBtn) dlBtn.disabled = count === 0;
   }
 
-  async function refreshToolbarCountFromStorage() {
-    const selection = await getSelection();
-    updateToolbarCount(selection.length);
-  }
-
-  function ensureToolbar() {
-    if (document.getElementById(TOOLBAR_ID)) return;
-
-    const root = document.createElement('div');
-    root.id = TOOLBAR_ID;
-    root.setAttribute('data-ibd-ui', '1');
-
-    root.innerHTML = `
-      <div data-ibd-ui="1" class="ibd-toolbar">
-        <div data-ibd-ui="1" class="ibd-toolbar__left">
-          <div data-ibd-ui="1" class="ibd-toolbar__title">Image Grabber Pro</div>
-          <div data-ibd-ui="1" class="ibd-toolbar__meta">Selected: <span data-ibd-ui="1" data-ibd-count>0</span></div>
-        </div>
-        <div data-ibd-ui="1" class="ibd-toolbar__actions">
-          <button data-ibd-ui="1" data-ibd-clear type="button" class="ibd-toolbar__btn">Clear</button>
-          <button data-ibd-ui="1" data-ibd-download type="button" class="ibd-toolbar__btn ibd-toolbar__btn--primary" disabled>Download</button>
-        </div>
-      </div>
-    `;
-
-    document.documentElement.appendChild(root);
-
-    const clearBtn = root.querySelector('[data-ibd-clear]');
-    const downloadBtn = root.querySelector('[data-ibd-download]');
-
-    if (clearBtn) {
-      clearBtn.addEventListener('click', async () => {
-        await setSelection([]);
-        await syncHighlightsFromStorage();
-        await refreshToolbarCountFromStorage();
-      });
-    }
-
-    if (downloadBtn) {
-      downloadBtn.addEventListener('click', async () => {
-        const selection = await getSelection();
-        if (!selection.length) return;
-        const quality = await getQuality();
-        await api.runtime.sendMessage({
-          type: 'IBD_DOWNLOAD_SELECTED',
-          payload: {
-            urls: selection,
-            quality,
-          },
-        });
-      });
-    }
-  }
-
-  function removeToolbar() {
-    const el = document.getElementById(TOOLBAR_ID);
-    if (el) el.remove();
-  }
-
-  function clearAllHighlights() {
-    const currentlyMarked = Array.from(document.querySelectorAll(`[${ATTR_SELECTED}]`));
-    for (const el of currentlyMarked) {
+  function applyHighlight(el, isSelected) {
+    if (!settingsCache.overlays) {
       el.removeAttribute(ATTR_SELECTED);
-    }
-  }
-
-  function applySelectionHighlightForUrl(url, isSelected) {
-    const norm = normalizeUrl(url);
-    if (!norm) return;
-
-    // Only check images that could potentially match
-    const imgs = Array.from(document.querySelectorAll('img[src], img[data-src], img[data-srcset]'));
-    for (const img of imgs) {
-      const imgUrl = getCandidateImgUrl(img);
-      if (normalizeUrl(imgUrl) === norm) {
-        const host = getBadgeHostForElement(img);
-        if (isSelected) {
-          img.setAttribute(ATTR_SELECTED, '1');
-          if (host) {
-            host.setAttribute(ATTR_SELECTED, '1');
-            ensureBadge(host);
-          }
-        } else {
-          img.removeAttribute(ATTR_SELECTED);
-          if (host) {
-            host.removeAttribute(ATTR_SELECTED);
-            removeBadge(host);
-          }
-        }
-      }
-    }
-
-    // Only check elements with background images
-    const bgElements = Array.from(document.querySelectorAll('[style*="background-image"], [class*="bg"]'));
-    for (const el of bgElements) {
-      const style = window.getComputedStyle(el);
-      const bgUrl = extractUrlFromBackgroundImage(style.backgroundImage);
-      if (normalizeUrl(bgUrl) === norm) {
-        if (isSelected) {
-          el.setAttribute(ATTR_SELECTED, '1');
-          ensureBadge(el);
-        } else {
-          el.removeAttribute(ATTR_SELECTED);
-          removeBadge(el);
-        }
-      }
-    }
-  }
-
-  async function syncHighlightsFromStorage() {
-    if (!isEnabled()) {
-      clearAllHighlights();
+      removeBadge(el);
       return;
     }
-    const selection = await getSelection();
 
-    const selectedSet = new Set(selection.map(normalizeUrl).filter(Boolean));
-
-    // Clear all highlights first and re-apply to ensure consistency
-    clearAllHighlights();
-
-    // Apply highlights to all selected URLs
-    for (const url of selectedSet) {
-      applySelectionHighlightForUrl(url, true);
+    if (isSelected) {
+      el.setAttribute(ATTR_SELECTED, '1');
+      if (el.tagName !== 'IMG') ensureBadge(el);
+      else {
+        const parent = el.parentElement;
+        if (parent && parent !== document.body) {
+          parent.setAttribute(ATTR_SELECTED, '1');
+          ensureBadge(parent);
+        }
+      }
+    } else {
+      el.removeAttribute(ATTR_SELECTED);
+      removeBadge(el);
+      const parent = el.parentElement;
+      if (parent) {
+        parent.removeAttribute(ATTR_SELECTED);
+        removeBadge(parent);
+      }
     }
+  }
+
+  async function syncHighlights() {
+    const currentlyMarked = document.querySelectorAll(`[${ATTR_SELECTED}], span[${BADGE_ATTR}]`);
+    currentlyMarked.forEach(el => {
+      el.removeAttribute(ATTR_SELECTED);
+      if (el.hasAttribute(BADGE_ATTR)) el.remove();
+    });
+
+    if (!settingsCache.enabled || (!settingsCache.overlays && !settingsCache.previews)) return;
+
+    const selection = await getSelection();
+    const selectedSet = new Set(selection);
+
+    // Optimized scan: only check visible/relevant elements
+    const imgs = document.querySelectorAll('img');
+    imgs.forEach(img => {
+      const url = getCandidateImgUrl(img);
+      if (url && selectedSet.has(url)) applyHighlight(img, true);
+    });
+
+    const bgs = document.querySelectorAll('[style*="background-image"]');
+    bgs.forEach(el => {
+      const url = extractUrlFromBackgroundImage(el.style.backgroundImage);
+      if (url && selectedSet.has(url)) applyHighlight(el, true);
+    });
 
     updateToolbarCount(selection.length);
   }
 
   async function toggleUrl(url) {
-    if (!isEnabled()) return { selection: await getSelection(), changed: false };
+    if (!settingsCache.enabled) return;
     const norm = normalizeUrl(url);
-    if (!norm) return { selection: await getSelection(), changed: false };
+    if (!norm) return;
 
     const selection = await getSelection();
-    const set = new Set(selection.map(normalizeUrl).filter(Boolean));
+    const set = new Set(selection);
 
-    let changed = false;
     if (set.has(norm)) {
       set.delete(norm);
-      changed = true;
-      applySelectionHighlightForUrl(norm, false);
     } else {
+      if (set.size >= settingsCache.maxSelection) return;
       set.add(norm);
-      changed = true;
-      applySelectionHighlightForUrl(norm, true);
     }
 
-    const updated = await setSelection(Array.from(set));
-    return { selection: updated, changed };
+    await setSelection(Array.from(set));
+    syncHighlights();
   }
 
-  document.addEventListener(
-    'click',
-    async (event) => {
-      if (!isEnabled()) return;
-      if (event.defaultPrevented) return;
-      if (event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  // Event Delegation
+  document.addEventListener('click', async (e) => {
+    if (!settingsCache.enabled) return;
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
 
-      const target = event.target;
-      if (target instanceof Element && target.closest('[data-ibd-ui="1"]')) return;
+    const target = e.target;
+    if (target.closest(`[data-ibd-ui="1"], #${TOOLBAR_ID}`)) return;
 
-      const url = getClickableImageUrlFromEvent(event);
-      if (!url) return;
+    let url = null;
+    let el = null;
 
-      const el = getClickableElementFromEvent(event);
-      if (el) {
-        event.preventDefault();
-        event.stopPropagation();
+    if (target.tagName === 'IMG') {
+      url = getCandidateImgUrl(target);
+      el = target;
+    } else {
+      const bgUrl = extractUrlFromBackgroundImage(window.getComputedStyle(target).backgroundImage);
+      if (bgUrl) {
+        url = bgUrl;
+        el = target;
       }
+    }
 
+    if (url) {
+      e.preventDefault();
+      e.stopPropagation();
       await toggleUrl(url);
-    },
-    true
-  );
+    }
+  }, true);
+
+  // Toolbar & Messaging
+  function ensureToolbar() {
+    if (document.getElementById(TOOLBAR_ID) || settingsCache.lowPerf) return;
+    const root = document.createElement('div');
+    root.id = TOOLBAR_ID;
+    root.innerHTML = `
+      <div class="ibd-toolbar" data-ibd-ui="1">
+        <div class="ibd-toolbar__left">
+          <div class="ibd-toolbar__title">Grabber Pro</div>
+          <div class="ibd-toolbar__meta">Selected: <span data-ibd-count>0</span></div>
+        </div>
+        <div class="ibd-toolbar__actions">
+          <button data-ibd-clear class="ibd-toolbar__btn">Clear</button>
+          <button data-ibd-download class="ibd-toolbar__btn ibd-toolbar__btn--primary" disabled>Download</button>
+        </div>
+      </div>
+    `;
+    document.documentElement.appendChild(root);
+
+    root.querySelector('[data-ibd-clear]').onclick = async () => {
+      await setSelection([]);
+      syncHighlights();
+    };
+    root.querySelector('[data-ibd-download]').onclick = () => {
+      api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' });
+    };
+  }
 
   api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    (async () => {
-      if (!msg || typeof msg !== 'object') return;
-
-      if (msg.type === 'IBD_GET_SELECTION') {
-        const selection = await getSelection();
-        sendResponse({ selection });
-        return;
+    if (msg.type === 'IBD_SET_ENABLED') {
+      settingsCache.enabled = !!msg.payload?.enabled;
+      if (!settingsCache.enabled) {
+        setSelection([]);
+        syncHighlights();
+        const tb = document.getElementById(TOOLBAR_ID);
+        if (tb) tb.remove();
+      } else {
+        ensureToolbar();
+        syncHighlights();
       }
-
-      if (msg.type === 'IBD_CLEAR_SELECTION') {
-        await setSelection([]);
-        await syncHighlightsFromStorage();
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (msg.type === 'IBD_SYNC_HIGHLIGHTS') {
-        await syncHighlightsFromStorage();
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (msg.type === 'IBD_SET_ENABLED') {
-        const enabled = Boolean(msg.payload && msg.payload.enabled);
-        await api.storage.local.set({ [ENABLED_KEY]: enabled });
-        if (!enabled) {
-          await setSelection([]);
-          clearAllHighlights();
-          removeToolbar();
-        } else {
-          ensureToolbar();
-          await syncHighlightsFromStorage();
-          await refreshToolbarCountFromStorage();
-        }
-        sendResponse({ ok: true });
-        return;
-      }
-    })();
-
-    return true;
+      sendResponse({ ok: true });
+    } else if (msg.type === 'IBD_SYNC_HIGHLIGHTS' || msg.type === 'IBD_CLEAR_SELECTION') {
+      if (msg.type === 'IBD_CLEAR_SELECTION') setSelection([]);
+      syncHighlights();
+      sendResponse({ ok: true });
+    }
   });
 
-  let enabledCache = false;
-  function isEnabled() {
-    return Boolean(enabledCache);
-  }
-
-  async function initEnabled() {
-    const stored = await api.storage.local.get(ENABLED_KEY);
-    enabledCache = Boolean(stored[ENABLED_KEY] ?? false);
-    if (!enabledCache) {
-      clearAllHighlights();
-      removeToolbar();
-    } else {
+  async function init() {
+    const stored = await api.storage.local.get([ENABLED_KEY, LOW_PERF_KEY, PREVIEW_KEY, OVERLAY_KEY, MAX_SELECT_KEY]);
+    settingsCache = {
+      enabled: !!stored[ENABLED_KEY],
+      lowPerf: !!stored[LOW_PERF_KEY],
+      previews: stored[PREVIEW_KEY] !== false,
+      overlays: stored[OVERLAY_KEY] !== false,
+      maxSelection: stored[MAX_SELECT_KEY] || 50
+    };
+    if (settingsCache.enabled) {
       ensureToolbar();
+      syncHighlights();
     }
   }
 
   api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    let needsSync = false;
     if (changes[ENABLED_KEY]) {
-      enabledCache = Boolean(changes[ENABLED_KEY].newValue);
-      if (!enabledCache) {
-        clearAllHighlights();
-        removeToolbar();
-      } else {
-        ensureToolbar();
-        scheduleHighlightSync();
-      }
+      settingsCache.enabled = !!changes[ENABLED_KEY].newValue;
+      needsSync = true;
     }
-  });
-
-  let mutationScheduled = false;
-  let mutationTimeout = null;
-  
-  function scheduleHighlightSync() {
-    if (mutationScheduled) return;
-    mutationScheduled = true;
-    
-    // Clear existing timeout
-    if (mutationTimeout) {
-      clearTimeout(mutationTimeout);
+    if (changes[LOW_PERF_KEY]) {
+      settingsCache.lowPerf = !!changes[LOW_PERF_KEY].newValue;
+      needsSync = true;
     }
-    
-    // Debounce with 100ms delay
-    mutationTimeout = setTimeout(async () => {
-      mutationScheduled = false;
-      mutationTimeout = null;
-      await syncHighlightsFromStorage();
-    }, 100);
-  }
-
-  const observer = new MutationObserver((mutations) => {
-    if (!isEnabled()) return;
-    
-    // Only trigger sync for relevant mutations
-    const hasRelevantChanges = mutations.some(mutation => {
-      // Check if mutation affects images or their attributes
-      if (mutation.type === 'childList') {
-        return Array.from(mutation.addedNodes).some(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            return node.tagName === 'IMG' || node.tagName === 'PICTURE' || 
-                   node.querySelector('img, picture');
-          }
-          return false;
-        });
-      }
-      
-      if (mutation.type === 'attributes') {
-        const target = mutation.target;
-        return target.tagName === 'IMG' || target.tagName === 'PICTURE' ||
-               target.tagName === 'SOURCE' || target.tagName === 'A';
-      }
-      
-      return false;
-    });
-    
-    if (hasRelevantChanges) {
-      scheduleHighlightSync();
+    if (changes[PREVIEW_KEY]) {
+      settingsCache.previews = !!changes[PREVIEW_KEY].newValue;
+      needsSync = true;
     }
+    if (changes[OVERLAY_KEY]) {
+      settingsCache.overlays = !!changes[OVERLAY_KEY].newValue;
+      needsSync = true;
+    }
+    if (changes[MAX_SELECT_KEY]) {
+      settingsCache.maxSelection = changes[MAX_SELECT_KEY].newValue || 50;
+    }
+    if (changes[STORAGE_KEY]) needsSync = true;
+
+    if (needsSync) syncHighlights();
   });
 
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['src', 'srcset', 'style', 'data-src', 'data-srcset', 'data-original', 'data-lazy-src'],
-  });
-
-  initEnabled().then(() => {
-    syncHighlightsFromStorage();
-  });
+  init();
 })();

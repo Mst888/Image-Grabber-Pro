@@ -2,10 +2,7 @@
   const api = typeof browser !== 'undefined' ? browser : chrome;
 
   const STORAGE_KEY = 'ibd_selectedImages_v1';
-  const QUALITY_KEY = 'ibd_jpegQuality_v1';
-
   const inFlight = new Set();
-
   const DEFAULT_FETCH_TIMEOUT_MS = 25000;
 
   function isValidHttpUrl(url) {
@@ -17,183 +14,153 @@
     }
   }
 
-  function clampQuality(q) {
-    const n = Number(q);
-    if (!Number.isFinite(n)) return 90;
-    return Math.min(100, Math.max(10, Math.round(n)));
-  }
-
   async function fetchAsBlob(url, timeoutMs) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_FETCH_TIMEOUT_MS);
 
-    const res = await fetch(url, {
-      mode: 'cors',
-      credentials: 'omit',
-      cache: 'no-store',
-      signal: controller.signal,
-    }).finally(() => {
+    try {
+      const res = await fetch(url, {
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      return await res.blob();
+    } finally {
       clearTimeout(timeout);
-    });
-
-    if (!res.ok) {
-      throw new Error(`Fetch failed (${res.status})`);
     }
-
-    return await res.blob();
   }
 
-  async function blobToJpegBlob(blob, qualityPercent) {
-    const quality = clampQuality(qualityPercent) / 100;
+  async function convertToFormat(blob, format, qualityPercent) {
+    if (format === 'original') return blob;
+
+    const quality = (qualityPercent || 90) / 100;
+    const mimeType = `image/${format === 'jpg' ? 'jpeg' : format}`;
 
     let bitmap;
     try {
       bitmap = await createImageBitmap(blob);
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-      const ctx = canvas.getContext('2d', { alpha: false });
+      const ctx = canvas.getContext('2d', { alpha: format !== 'jpeg' });
       ctx.drawImage(bitmap, 0, 0);
 
-      if (typeof canvas.convertToBlob === 'function') {
-        return await canvas.convertToBlob({ type: 'image/jpeg', quality });
-      }
-
-      const b = await new Promise((resolve) => {
-        canvas.toBlob((out) => resolve(out), 'image/jpeg', quality);
+      const outBlob = await canvas.convertToBlob({
+        type: mimeType,
+        quality: (format === 'jpeg' || format === 'webp') ? quality : undefined
       });
 
-      if (!b) throw new Error('JPEG conversion failed.');
-      return b;
+      if (!outBlob) throw new Error(`${format.toUpperCase()} conversion failed.`);
+      return outBlob;
     } finally {
-      try {
-        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
-      } catch (_) {
-      }
+      if (bitmap) bitmap.close();
     }
   }
 
-  async function downloadJpegBlob(jpegBlob, filename, downloadLocation) {
-    const objectUrl = URL.createObjectURL(jpegBlob);
+  async function downloadBlob(blob, filename, folderName, downloadLocation) {
+    const objectUrl = URL.createObjectURL(blob);
+    const finalFilename = folderName ? `${folderName.replace(/[\\/:*?"<>|]/g, '_')}/${filename}` : filename;
 
     try {
-      const downloadId = await api.downloads.download({
+      return await api.downloads.download({
         url: objectUrl,
-        filename,
+        filename: finalFilename,
         saveAs: downloadLocation === 'ask',
         conflictAction: 'uniquify',
       });
-      return downloadId;
     } finally {
-      setTimeout(() => {
-        try {
-          URL.revokeObjectURL(objectUrl);
-        } catch (_) {
-        }
-      }, 5000); // Reduced from 60 seconds to 5 seconds
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
     }
-  }
-
-  async function clearSelection() {
-    await api.storage.local.set({ [STORAGE_KEY]: [] });
-  }
-
-  async function getQualityFromStorage(fallback) {
-    const stored = await api.storage.local.get(QUALITY_KEY);
-    const q = stored[QUALITY_KEY];
-    return clampQuality(q ?? fallback ?? 90);
   }
 
   async function handleDownloadSelected(payload) {
-    const urls = payload && Array.isArray(payload.urls) ? payload.urls : [];
-    const inputQuality = payload && payload.quality != null ? payload.quality : undefined;
-    const downloadLocation = payload && payload.downloadLocation ? payload.downloadLocation : 'default';
-    const timeoutMs = payload && payload.timeoutMs != null ? Number(payload.timeoutMs) : undefined;
+    const {
+      urls = [],
+      quality = 90,
+      downloadLocation = 'default',
+      format = 'original',
+      folderName = '',
+      batchSize = 5,
+      downloadDelay = 100
+    } = payload;
 
-    const quality = clampQuality(inputQuality ?? (await getQualityFromStorage(90)));
-
-    const uniqueUrls = Array.from(
-      new Set(
-        urls
-          .map((u) => (typeof u === 'string' ? u.trim() : ''))
-          .filter((u) => isValidHttpUrl(u))
-      )
-    );
-
-    if (!uniqueUrls.length) {
-      return { ok: false, error: 'No valid image URLs to download.' };
-    }
+    const uniqueUrls = Array.from(new Set(urls.filter(isValidHttpUrl)));
+    if (!uniqueUrls.length) return { ok: false, error: 'No valid URLs.' };
 
     const batchKey = uniqueUrls.join('|');
-    if (inFlight.has(batchKey)) {
-      return { ok: false, error: 'Download already in progress.' };
-    }
-
+    if (inFlight.has(batchKey)) return { ok: false, error: 'Download in progress.' };
     inFlight.add(batchKey);
 
+    const failures = [];
+    const isLowPerf = !!payload.lowPerf;
+    let finalQuality = quality;
+    if (isLowPerf && uniqueUrls.length > 20) {
+      finalQuality = Math.max(50, quality - 20);
+    }
+
     try {
-      const failures = [];
+      for (let i = 0; i < uniqueUrls.length; i += batchSize) {
+        const chunk = uniqueUrls.slice(i, i + batchSize);
 
-      for (let i = 0; i < uniqueUrls.length; i++) {
-        const url = uniqueUrls[i];
-        const filename = `image_${i + 1}.jpg`;
+        await Promise.all(chunk.map(async (url, index) => {
+          const globalIndex = i + index;
+          const ext = format === 'original' ? 'jpg' : (format === 'jpeg' ? 'jpg' : format);
+          const filename = `image_${globalIndex + 1}.${ext}`;
 
-        const perUrlKey = `url:${url}`;
-        if (inFlight.has(perUrlKey)) {
-          continue;
-        }
-        inFlight.add(perUrlKey);
-
-        try {
           try {
-            const blob = await fetchAsBlob(url, timeoutMs);
-            const jpeg = await blobToJpegBlob(blob, quality);
-            await downloadJpegBlob(jpeg, filename, downloadLocation);
-            
-            // Immediately clean up blob references to free memory
-            if (blob && typeof blob.close === 'function') {
-              blob.close();
-            }
-            if (jpeg && typeof jpeg.close === 'function') {
-              jpeg.close();
-            }
+            const blob = await fetchAsBlob(url);
+            const processed = await convertToFormat(blob, format, finalQuality);
+            await downloadBlob(processed, filename, folderName, downloadLocation);
+
+            if (blob !== processed && blob.close) blob.close();
+            if (processed.close) processed.close();
           } catch (err) {
-            const msg = err && err.name === 'AbortError' ? 'Fetch timed out.' : err && err.message ? err.message : 'Download failed.';
-            failures.push({ url, error: msg });
+            failures.push({ url, error: err.message });
           }
-        } finally {
-          inFlight.delete(perUrlKey);
+        }));
+
+        if (i + batchSize < uniqueUrls.length && downloadDelay > 0) {
+          await new Promise(r => setTimeout(r, downloadDelay));
         }
       }
 
-      await clearSelection();
-
-      if (failures.length) {
-        return {
-          ok: false,
-          error: `Some images could not be processed. (CORS, blocked image, or timeout may be the cause.)`,
-          failures,
-        };
-      }
-
-      return { ok: true };
-    } catch (err) {
-      const msg = err && err.name === 'AbortError' ? 'Fetch timed out.' : err && err.message ? err.message : 'Download failed.';
-      return { ok: false, error: msg + ' (CORS, blocked image, or timeout may be the cause.)' };
+      await api.storage.local.set({ [STORAGE_KEY]: [] });
+      return failures.length ? { ok: false, failures } : { ok: true };
     } finally {
       inFlight.delete(batchKey);
     }
   }
 
   api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    (async () => {
-      if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'IBD_DOWNLOAD_SELECTED') {
+      handleDownloadSelected(msg.payload).then(sendResponse);
+      return true;
+    }
 
-      if (msg.type === 'IBD_DOWNLOAD_SELECTED') {
-        const result = await handleDownloadSelected(msg.payload);
+    if (msg.type === 'IBD_DOWNLOAD_REQUEST_FROM_PAGE') {
+      (async () => {
+        const stored = await api.storage.local.get([
+          STORAGE_KEY, 'ibd_jpegQuality_v1', 'ibd_downloadLocation_v1',
+          'ibd_outputFormat_v1', 'ibd_folderName_v1', 'ibd_batchSize_v1',
+          'ibd_downloadDelay_v1', 'ibd_lazyProcess_v1'
+        ]);
+
+        const payload = {
+          urls: stored[STORAGE_KEY] || [],
+          quality: stored['ibd_jpegQuality_v1'] || 90,
+          downloadLocation: stored['ibd_downloadLocation_v1'] || 'default',
+          format: stored['ibd_outputFormat_v1'] || 'original',
+          folderName: stored['ibd_folderName_v1'] || '',
+          batchSize: stored['ibd_batchSize_v1'] || 5,
+          downloadDelay: stored['ibd_downloadDelay_v1'] || 100,
+          lazy: !!stored['ibd_lazyProcess_v1']
+        };
+
+        const result = await handleDownloadSelected(payload);
         sendResponse(result);
-        return;
-      }
-    })();
-
-    return true;
+      })();
+      return true;
+    }
   });
 })();

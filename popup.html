@@ -30,20 +30,90 @@
       </div>
 
       <div class="ibd-field">
-        <label class="ibd-label" for="quality">JPEG quality</label>
+        <label class="ibd-label" for="outputFormat">Output Format</label>
+        <select id="outputFormat" class="ibd-select">
+          <option value="original">Original</option>
+          <option value="jpeg">JPEG</option>
+          <option value="png">PNG</option>
+          <option value="webp">WEBP</option>
+        </select>
+      </div>
+
+      <div class="ibd-field" id="qualityField">
+        <label class="ibd-label" for="quality">Quality (JPEG/WEBP)</label>
         <div class="ibd-quality-row">
-          <input id="quality" type="range" min="10" max="100" step="1" value="90" />
+          <input id="quality" type="range" min="60" max="100" step="1" value="90" />
           <div class="ibd-quality-value"><span id="qualityValue">90</span>%</div>
         </div>
       </div>
 
       <div class="ibd-field">
-        <label class="ibd-label" for="downloadLocation">Download location</label>
+        <label class="ibd-label" for="folderName">Folder Name (Optional)</label>
+        <input type="text" id="folderName" class="ibd-input" placeholder="selected_images" />
+      </div>
+
+      <div class="ibd-field">
+        <label class="ibd-label" for="downloadLocation">Download Strategy</label>
         <div class="ibd-location-row">
           <select id="downloadLocation" class="ibd-select">
-            <option value="default">Default download folder</option>
-            <option value="ask">Ask where to save each time</option>
+            <option value="default">Download Folder</option>
+            <option value="ask">Ask each time</option>
           </select>
+        </div>
+      </div>
+
+      <div class="ibd-divider"></div>
+
+      <div class="ibd-section-header">
+        <div class="ibd-section-title">Optimization Settings</div>
+      </div>
+
+      <div class="ibd-toggle-mini">
+        <label class="ibd-label-mini">Low Performance Mode</label>
+        <label class="ibd-switch-mini">
+          <input id="lowPerfToggle" type="checkbox" />
+          <span class="ibd-slider-mini"></span>
+        </label>
+      </div>
+
+      <div class="ibd-toggle-mini">
+        <label class="ibd-label-mini">Image Previews</label>
+        <label class="ibd-switch-mini">
+          <input id="previewToggle" type="checkbox" checked />
+          <span class="ibd-slider-mini"></span>
+        </label>
+      </div>
+
+      <div class="ibd-toggle-mini">
+        <label class="ibd-label-mini">UI Overlays</label>
+        <label class="ibd-switch-mini">
+          <input id="overlayToggle" type="checkbox" checked />
+          <span class="ibd-slider-mini"></span>
+        </label>
+      </div>
+
+      <div class="ibd-field-row">
+        <div class="ibd-field-half">
+          <label class="ibd-label-mini">Batch Size</label>
+          <input type="number" id="batchSize" class="ibd-input-mini" value="5" min="1" max="20" />
+        </div>
+        <div class="ibd-field-half">
+          <label class="ibd-label-mini">Delay (ms)</label>
+          <input type="number" id="downloadDelay" class="ibd-input-mini" value="100" min="0" step="50" />
+        </div>
+      </div>
+
+      <div class="ibd-field-row">
+        <div class="ibd-field-half">
+          <label class="ibd-label-mini">Max Select</label>
+          <input type="number" id="maxSelection" class="ibd-input-mini" value="50" min="1" />
+        </div>
+        <div class="ibd-field-half">
+          <label class="ibd-label-mini">Lazy Process</label>
+          <label class="ibd-switch-mini">
+            <input id="lazyProcessToggle" type="checkbox" />
+            <span class="ibd-slider-mini"></span>
+          </label>
         </div>
       </div>
 
