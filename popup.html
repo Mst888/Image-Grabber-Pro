@@ -1,60 +1,250 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Image Grabber Pro</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body class="ibd-popup">
-    <div class="ibd-card">
-      <div class="ibd-header">
-        <div class="ibd-title"><img class="ibd-logo" src="icon.svg" alt="" />Image Grabber Pro</div>
-        <div class="ibd-subtitle">Select images on the page, then download.</div>
-      </div>
 
-      <div class="ibd-toggle">
-        <div>
-          <div class="ibd-toggle-title">Selection mode</div>
-          <div class="ibd-toggle-subtitle">Turn on to select images on the current tab</div>
-        </div>
-        <label class="ibd-switch">
-          <input id="enabledToggle" type="checkbox" />
-          <span class="ibd-slider"></span>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photo-Grab</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="ibd-popup">
+  <div class="ibd-card">
+    <div class="ibd-header">
+      <div class="ibd-title"><img class="ibd-logo" src="icon.svg" alt="" />Photo-Grab</div>
+      <div class="ibd-subtitle">Select images on the page, then download.</div>
+    </div>
+
+    <div class="ibd-toggle">
+      <div>
+        <div class="ibd-toggle-title">Selection mode</div>
+        <div class="ibd-toggle-subtitle">Turn on to select images on the current tab</div>
+      </div>
+      <label class="ibd-switch">
+        <input id="enabledToggle" type="checkbox" />
+        <span class="ibd-slider"></span>
+      </label>
+    </div>
+
+    <div class="ibd-stat">
+      <div class="ibd-stat-label">Selected images</div>
+      <div class="ibd-stat-value" id="selectedCount">0</div>
+    </div>
+
+    <div class="ibd-field">
+      <label class="ibd-label" for="outputFormat">Output Format</label>
+      <select id="outputFormat" class="ibd-select">
+        <option value="original">Original</option>
+        <option value="jpeg">JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WEBP</option>
+      </select>
+    </div>
+
+    <div class="ibd-field" id="qualityField">
+      <label class="ibd-label" for="quality">Quality (JPEG/WEBP)</label>
+      <div class="ibd-quality-row">
+        <input id="quality" type="range" min="60" max="100" step="1" value="90" />
+        <div class="ibd-quality-value"><span id="qualityValue">90</span>%</div>
+      </div>
+    </div>
+
+    <div class="ibd-field">
+      <label class="ibd-label">Save Location</label>
+
+      <div class="ibd-toggle-mini">
+        <label class="ibd-label-mini">Always ask for location</label>
+        <label class="ibd-switch-mini">
+          <input id="askLocationToggle" type="checkbox" />
+          <span class="ibd-slider-mini"></span>
         </label>
       </div>
 
-      <div class="ibd-stat">
-        <div class="ibd-stat-label">Selected images</div>
-        <div class="ibd-stat-value" id="selectedCount">0</div>
+      <div class="ibd-toggle-mini">
+        <label class="ibd-label-mini">Save to subfolder</label>
+        <label class="ibd-switch-mini">
+          <input id="useSubfolderToggle" type="checkbox" />
+          <span class="ibd-slider-mini"></span>
+        </label>
       </div>
 
-      <div class="ibd-field">
-        <label class="ibd-label" for="quality">JPEG quality</label>
-        <div class="ibd-quality-row">
-          <input id="quality" type="range" min="10" max="100" step="1" value="90" />
-          <div class="ibd-quality-value"><span id="qualityValue">90</span>%</div>
-        </div>
+      <div id="subfolderField" style="display: none;">
+        <input type="text" id="folderName" class="ibd-input-mini" placeholder="e.g. vacation_photos" />
       </div>
-
-      <div class="ibd-field">
-        <label class="ibd-label" for="downloadLocation">Download location</label>
-        <div class="ibd-location-row">
-          <select id="downloadLocation" class="ibd-select">
-            <option value="default">Default download folder</option>
-            <option value="ask">Ask where to save each time</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="ibd-actions">
-        <button id="downloadBtn" class="ibd-btn ibd-btn-primary" type="button">Download Selected</button>
-        <button id="clearBtn" class="ibd-btn ibd-btn-ghost" type="button">Clear Selection</button>
-      </div>
-
-      <div class="ibd-status" id="status" aria-live="polite"></div>
     </div>
 
-    <script src="popup.js"></script>
-  </body>
+    <div class="ibd-field ibd-field--centered">
+      <label class="ibd-label">UI Theme</label>
+      <div class="ibd-theme-toggle">
+        <input type="radio" id="themeLight" name="theme" value="light" checked />
+        <label for="themeLight" class="ibd-toggle-item" title="Light Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </label>
+
+        <input type="radio" id="themeDark" name="theme" value="dark" />
+        <label for="themeDark" class="ibd-toggle-item" title="Dark Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </label>
+
+        <input type="radio" id="themeBlue" name="theme" value="blue" />
+        <label for="themeBlue" class="ibd-toggle-item" title="Blue Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+          </svg>
+        </label>
+
+        <input type="radio" id="themePink" name="theme" value="pink" />
+        <label for="themePink" class="ibd-toggle-item" title="Pink Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+          </svg>
+        </label>
+
+
+        <input type="radio" id="themeSpotify" name="theme" value="spotify" />
+        <label for="themeSpotify" class="ibd-toggle-item" title="Spotify Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 14.5c2.5-1 5.5-1 8 0M8 11.5c3-1 6-1 9 0M9 8.5c2-1 4-1 6 0" />
+          </svg>
+        </label>
+
+        <input type="radio" id="themeGray" name="theme" value="gray" />
+        <label for="themeGray" class="ibd-toggle-item" title="Gray Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z" />
+          </svg>
+        </label>
+
+        <div class="ibd-toggle-thumb"></div>
+      </div>
+    </div>
+
+    <div class="ibd-field">
+      <label class="ibd-label" for="selectionMode">Selection Mode</label>
+      <select id="selectionMode" class="ibd-select">
+        <option value="normal">Normal Style</option>
+        <option value="area">Area Selection Mode</option>
+        <option value="sameSize">Same Size Mode</option>
+        <option value="large">Large Images Mode</option>
+      </select>
+    </div>
+
+    <div id="previewGallerySection" class="ibd-field">
+      <label class="ibd-label">Selection Gallery</label>
+      <div id="previewGallery" class="ibd-preview-gallery">
+        <!-- Thumbnails will render here -->
+      </div>
+      <div id="previewDisabledMsg" class="ibd-status-msg" style="display: none;">
+        Preview disabled for performance
+      </div>
+    </div>
+
+    <div class="ibd-divider"></div>
+
+    <div class="ibd-section-header">
+      <div class="ibd-section-title">Download Settings</div>
+    </div>
+
+    <div class="ibd-field">
+      <label class="ibd-label" for="namingMode">Filename Mode</label>
+      <select id="namingMode" class="ibd-select">
+        <option value="auto">Automatic (Title_001)</option>
+        <option value="sequential">Sequential (Img_001)</option>
+        <option value="custom">Custom Template</option>
+      </select>
+    </div>
+
+    <div id="customNameField" class="ibd-field" style="display: none;">
+      <label class="ibd-label" for="customTemplate">Template (Use {site}, {title}, {index})</label>
+      <input type="text" id="customTemplate" class="ibd-input-mini" placeholder="{site}_{title}_{index}" />
+    </div>
+
+    <div class="ibd-toggle-mini">
+      <label class="ibd-label-mini">Download as ZIP Bundle</label>
+      <label class="ibd-switch-mini">
+        <input type="checkbox" id="zipDownloadToggle" />
+        <span class="ibd-slider-mini"></span>
+      </label>
+    </div>
+
+    <div class="ibd-toggle-mini">
+      <label class="ibd-label-mini">Low Performance Mode</label>
+      <label class="ibd-switch-mini">
+        <input id="lowPerfToggle" type="checkbox" />
+        <span class="ibd-slider-mini"></span>
+      </label>
+    </div>
+
+    <div class="ibd-toggle-mini">
+      <label class="ibd-label-mini">Image Previews</label>
+      <label class="ibd-switch-mini">
+        <input id="previewToggle" type="checkbox" checked />
+        <span class="ibd-slider-mini"></span>
+      </label>
+    </div>
+
+    <div class="ibd-toggle-mini">
+      <label class="ibd-label-mini">UI Overlays</label>
+      <label class="ibd-switch-mini">
+        <input id="overlayToggle" type="checkbox" checked />
+        <span class="ibd-slider-mini"></span>
+      </label>
+    </div>
+
+    <div class="ibd-field-row">
+      <div class="ibd-field-half">
+        <label class="ibd-label-mini">Batch Size</label>
+        <input type="number" id="batchSize" class="ibd-input-mini" value="5" min="1" max="20" />
+      </div>
+      <div class="ibd-field-half">
+        <label class="ibd-label-mini">Delay (ms)</label>
+        <input type="number" id="downloadDelay" class="ibd-input-mini" value="100" min="0" step="50" />
+      </div>
+    </div>
+
+    <div class="ibd-field-row">
+      <div class="ibd-field-half">
+        <label class="ibd-label-mini">Max Select</label>
+        <input type="number" id="maxSelection" class="ibd-input-mini" value="50" min="1" />
+      </div>
+      <div class="ibd-field-half">
+        <label class="ibd-label-mini">Lazy Process</label>
+        <label class="ibd-switch-mini">
+          <input id="lazyProcessToggle" type="checkbox" />
+          <span class="ibd-slider-mini"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="ibd-actions">
+      <button id="downloadBtn" class="ibd-btn ibd-btn-primary" type="button">Download Selected</button>
+      <button id="clearBtn" class="ibd-btn ibd-btn-ghost" type="button">Clear Selection</button>
+    </div>
+
+    <div class="ibd-status" id="status" aria-live="polite"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
 </html>

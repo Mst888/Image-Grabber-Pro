@@ -1,27 +1,52 @@
 {
   "manifest_version": 3,
-  "name": "Image Grabber Pro",
-  "version": "1.0.0",
+  "name": "Photo-Grab",
+  "version": "1.6.3",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "photo-grab@mesud.dev",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
   "description": "Select multiple images on web pages and download them together",
-  "permissions": ["activeTab", "storage", "downloads"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "icons": {
     "128": "icon.svg"
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "jszip.min.js",
+      "background.js"
+    ]
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["style.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "style.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Image Grabber Pro",
+    "default_title": "Photo-Grab",
     "default_icon": {
       "128": "icon.svg"
     }
