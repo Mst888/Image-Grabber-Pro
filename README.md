@@ -1,76 +1,137 @@
 # Photo-Grab 📸
 
-**Photo-Grab** is a professional, high-performance web extension designed for power users who need to select, organize, and download images from the web with precision and speed.
+Photo-Grab: Web sayfalarındaki yüksek çözünürlüklü görselleri hızla seçip toplu halde indirebileceğiniz, akıllı adlandırma ve ZIP paketleme desteği sunan profesyonel tarayıcı uzantısı — içerik üreticileri, araştırmacılar ve görsel koleksiyoncular için ideal.
 
-<img width="335" height="700" alt="Screenshot 2025-12-27 180609" src="https://github.com/user-attachments/assets/e9e421f4-110f-4b49-96be-e3d2fa2a4546" />
-<img width="326" height="695" alt="Screenshot 2025-12-27 180741" src="https://github.com/user-attachments/assets/d3f288ec-9b25-4a26-b499-880216014cb1" />
-<img width="333" height="725" alt="Screenshot 2025-12-27 180802" src="https://github.com/user-attachments/assets/298bd574-fff3-4c1f-828c-a926170a702d" />
-<img width="1890" height="997" alt="Screenshot 2025-12-27 180659" src="https://github.com/user-attachments/assets/248fb72f-a54e-4928-a654-b2d0ab791865" />
-<img width="1885" height="993" alt="Screenshot 2025-12-27 180622" src="https://github.com/user-attachments/assets/f14c2416-d366-4b63-9c7a-87a455e60e3c" />
-<img width="1879" height="963" alt="Screenshot 2025-12-27 143329" src="https://github.com/user-attachments/assets/a69935cf-dfe0-4671-bd6f-848fa8d653cf" />
-<img width="1919" height="1015" alt="Screenshot 2025-12-25 190131" src="https://github.com/user-attachments/assets/9c086134-86b1-432e-9dda-1e6736a417c6" />
-<img width="330" height="614" alt="Screenshot 2025-12-27 143304" src="https://github.com/user-attachments/assets/85b26c08-03de-4520-bc71-0cc83e42ed0b" />
-<img width="330" height="616" alt="Screenshot 2025-12-27 143254" src="https://github.com/user-attachments/assets/68550f78-f1a2-476b-a96c-97e04f42e68f" />
-<img width="330" height="607" alt="Screenshot 2025-12-27 143245" src="https://github.com/user-attachments/assets/81e4a89d-601b-4b78-ac85-a415c3d90517" />
-<img width="330" height="601" alt="Screenshot 2025-12-27 143235" src="https://github.com/user-attachments/assets/bf741b1b-f774-43ee-84f3-bb3a39b33aa8" />
-<img width="330" height="607" alt="Screenshot 2025-12-27 143220" src="https://github.com/user-attachments/assets/24fc9f24-b24f-4234-a047-bb9cca9beccb" />
-<img width="330" height="600" alt="Screenshot 2025-12-27 143205" src="https://github.com/user-attachments/assets/5573876b-c0fc-43a3-a8da-492bbe7c17ed" />
-
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Version: 1.7.1](https://img.shields.io/badge/Version-1.7.1-blue)
 
 ---
 
-## 🌟 Key Features
-
-### 🎯 Precision Selection
-- **Area Selection**: Drag a rectangle over the webpage to select multiple images at once.
-- **Smart Filters**: Instantly find high-resolution images (800x600+) or specific formats.
-- **Same Size Mode**: Select one image and automatically find all other images on the page with matching dimensions.
-- **Visual Feedback**: Real-time blue outlines and index badges keep you informed of your selection.
-
-### 📦 Power Downloads (v1.6+)
-- **ZIP Bundling**: Pack your entire selection into a single `.zip` archive for a cleaner download experience.
-- **Smart Naming Templates**: Use dynamic variables like `{site}`, `{title}`, and `{index}` to automatically name your files.
-- **Subfolder Support**: Organize downloads into custom subfolders directly from the popup.
-
-### 🎨 Premium UI/UX
-- **Compact Popup**: A streamlined **300x500** interface that stays out of your way.
-- **Modern Themes**: Choose from several premium themes, including **Onyx Gray**, **Spotify Green**, and **Classic Blue**.
-- **Floating Toolbar**: A non-intrusive on-page toolbar for quick actions without opening the popup.
+## Neden Photo-Grab?
+Hızlı seçim araçları, filtreler ve toplu indirme iş akışıyla yüzlerce görseli birkaç tıklamada arşivleyin. Same Size Mode, ZIP bundling ve dinamik isimlendirme gerçek zamanlı üretkenlik sağlar.
 
 ---
 
-## 🛠️ Build Instructions
+## Hızlı Özellikler
+- Area Selection: Sayfa üzerinde dikdörtgenle çoklu seçim (mavi kontur + indeks rozetleri)  
+- Same Size Mode & Smart Filters: Aynı boyut/çözünürlükteki görselleri yakalayın  
+- ZIP bundling + Akıllı İsimlendirme: `{site}`, `{title}`, `{index}` değişkenleri  
+- Kompakt Popup (300x500) + Floating Toolbar  
+- Temalar: Onyx Gray, Spotify Green, Classic Blue
 
-This repository contains the source code for **Photo-Grab**. Follow these steps to build the extension from source:
+---
 
-### 1. Environment Requirements
-- **Node.js**: v18.x or higher.
-- **npm**: v9.x or higher.
+## Ekran Görüntüleri — Özelliğe Göre Düzenlendi
+(Her görselin altında kısa açıklama var — ziyaretçiler ne gördüğünü hemen anlar.)
 
-### 2. Installation
+### 1) Area Selection — Alanla Seçme ve Görsel Geri Bildirim
+<img alt="Area selection with badges" src="https://github.com/user-attachments/assets/e9e421f4-110f-4b49-96be-e3d2fa2a4546" />
+*Sayfa üzerinde dikdörtgen ile çoklu görsel seçme; mavi kontur ve indeks rozetleri.*
+
+<img alt="Selection badges and overlay" src="https://github.com/user-attachments/assets/d3f288ec-9b25-4a26-b499-880216014cb1" />
+*Seçilen görsellerin indekslenmesi ve anlık seçim özeti.*
+
+---
+
+### 2) Popup UI & Floating Toolbar — Hızlı Erişim
+<img alt="Compact popup UI" src="https://github.com/user-attachments/assets/298bd574-fff3-4c1f-828c-a926170a702d" />
+*Kompakt popup (300x500) — filtreler, isimlendirme ve indirme seçenekleri.*
+
+<img alt="Floating toolbar on page" src="https://github.com/user-attachments/assets/248fb72f-a54e-4928-a654-b2d0ab791865" />
+*Kayan araç çubuğu — popup açmadan hızlı seçim ve işlemler.*
+
+<img alt="Popup themes and list" src="https://github.com/user-attachments/assets/f14c2416-d366-4b63-9c7a-87a455e60e3c" />
+*Popup içi liste görünümü ve tema önizlemesi.*
+
+---
+
+### 3) Same Size Mode & Smart Filters
+<img alt="Same size mode and filters" src="https://github.com/user-attachments/assets/d3f288ec-9b25-4a26-b499-880216014cb1" />
+*Bir görsel seçin; aynı boyuttaki tüm görseller otomatik seçilir.*
+
+---
+
+### 4) Toplu İndirme, ZIP Bundling & Akıllı İsimlendirme
+<img alt="ZIP bundling and download flow" src="https://github.com/user-attachments/assets/a69935cf-dfe0-4671-bd6f-848fa8d653cf" />
+*Seçimi `.zip` içinde paketleyip indirme akışı.*
+
+<img alt="Naming templates and subfolders" src="https://github.com/user-attachments/assets/9c086134-86b1-432e-9dda-1e6736a417c6" />
+*Dinamik isimlendirme şablonları ve alt klasör desteği.*
+
+---
+
+### 5) Tema & Ayarlar — Görünümü Kişiselleştirme
+<img alt="Theme example 1" src="https://github.com/user-attachments/assets/85b26c08-03de-4520-bc71-0cc83e42ed0b" />
+<img alt="Theme example 2" src="https://github.com/user-attachments/assets/68550f78-f1a2-476b-a96c-97e04f42e68f" />
+<img alt="Theme example 3" src="https://github.com/user-attachments/assets/81e4a89d-601b-4b78-ac85-a415c3d90517" />
+*Tema seçenekleri ve ayarlar ekranı örnekleri.*
+
+---
+
+### 6) Mobil / Responsive Önizleme
+<img alt="Mobile preview 1" src="https://github.com/user-attachments/assets/bf741b1b-f774-43ee-84f3-bb3a39b33aa8" />
+<img alt="Mobile preview 2" src="https://github.com/user-attachments/assets/24fc9f24-b24f-4234-a047-bb9cca9beccb" />
+<img alt="Mobile preview 3" src="https://github.com/user-attachments/assets/5573876b-c0fc-43a3-a8da-492bbe7c17ed" />
+*Mobil önizlemeler — masaüstü deneyimi esas olmakla birlikte bazı responsive görünüm örnekleri.*
+
+---
+
+## Kurulum — Adım Adım (Kullanıcı + Geliştirici)
+Manifest dosyalarına ve raw hallerine doğrudan bağlantılar:
+- manifest (repo): https://github.com/Mst888/Photo-Grab/blob/b4b99e8f22b4f8bcaf4828e6ae435761810784f1/manifest.json  
+- manifest.chrome (repo): https://github.com/Mst888/Photo-Grab/blob/b4b99e8f22b4f8bcaf4828e6ae435761810784f1/manifest.chrome.json  
+- Raw manifest: https://raw.githubusercontent.com/Mst888/Photo-Grab/b4b99e8f22b4f8bcaf4828e6ae435761810784f1/manifest.json  
+- Raw manifest.chrome: https://raw.githubusercontent.com/Mst888/Photo-Grab/b4b99e8f22b4f8bcaf4828e6ae435761810784f1/manifest.chrome.json
+
+Seçenek A — Hazır paket (kullanıcılar için)
+1. Releases veya `web-ext-artifacts/` içindeki `.zip` dosyasını indirin.  
+2. Chrome: chrome://extensions → Geliştirici modu açık → "Load unpacked" ile zip içeriğini çıkardığınız klasörü seçin.  
+3. Firefox: about:debugging → "Temporary Add-on" ile `manifest.json` veya XPI dosyasını seçin.
+
+Seçenek B — Kaynak koddan geliştirme
 ```bash
+git clone https://github.com/Mst888/Photo-Grab.git
+cd Photo-Grab
 npm install
-```
-
-### 3. Packaging
-To generate a distributable `.zip` file:
-```bash
 npm run build
+# Çıktıyı yükleyin: web-ext-artifacts/ içindeki build klasörünü kullanın
 ```
-The resulting package will be in the `web-ext-artifacts/` directory.
+- Chrome: chrome://extensions → Load unpacked → build klasörünü seçin.  
+- Firefox: `npx web-ext run --source-dir=./src` ile hızlı test.
+
+Seçenek C — Manuel manifest testi
+1. Raw manifest dosyasını indirin (linkler yukarı).  
+2. Yeni bir klasör oluşturun, manifest ve varsa gerekli dosyaları (popup, icons, content scripts) koyun.  
+3. chrome://extensions → Load unpacked ile klasörü yükleyin.
+
+Not: Sadece manifest tek başına çalışmaz — popup dosyaları, content script'ler ve ikonlar ilgili klasörde olmalıdır.
 
 ---
 
-## 📄 Source Code Policy
-- **Vanilla JS**: No transpilation, minification, or obfuscation is applied.
-- **Human Readable**: The code is provided in its original form for full transparency.
+## Hızlı Kullanım — 3 Adım (görsellerle)
+1. Sayfada dikdörtgen ile seçim yapın (bakınız: Area Selection görselleri).  
+2. Popup'ta filtreleri ve isimlendirmeyi ayarlayın (bakınız: Popup & Naming görselleri).  
+3. "Download" ile ZIP oluşturun ve indirin.
 
-## License
-This project is licensed under the MIT License.
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+---
 
-**Author**: Mst888 
-**Version**: 1.7.1
+## Güvenlik & İzinler
+- Gereken izinler: activeTab / host izinleri (manifest içinde görülebilir).  
+- Gizlilik: Uzantı kişisel veri toplamaz; yalnızca seçilen görsellerin URL ve görüntü verisini indirme amaçlı kullanır. Manifest ve izin ayrıntıları için manifest dosyalarını inceleyin.
 
+---
 
+## Daha İyi Demo (Öneri)
+README’ye 10–20s’lik bir GIF veya kısa video eklerseniz dönüşüm çok artar. İstersen hangi adımı (Area Selection → ZIP download gibi) kaydedeceğini söyleyeyim; senin için GIF önerisi ve kırpma talimatı hazırlarım.
 
+---
+
+## Katkı & Destek
+- Hata/istek için Issues açın.  
+- README’ye eklemek istediğiniz demo GIF/mağaza linkleri varsa gönderin — ben yerleştiririm.
+
+---
+
+## Lisans & Bilgiler
+- Lisans: MIT  
+- Author: Mst888  
+- Version: 1.7.1
