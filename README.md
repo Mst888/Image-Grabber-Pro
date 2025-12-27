@@ -50,5 +50,9 @@ The resulting package will be in the `web-ext-artifacts/` directory.
 - **Vanilla JS**: No transpilation, minification, or obfuscation is applied.
 - **Human Readable**: The code is provided in its original form for full transparency.
 
+## License
+This project is licensed under the MIT License.
+
 **Author**: Mst888 
 **Version**: 1.7.1
+
