@@ -1,0 +1,2 @@
+there is bug on the extention when popup menu closes the selection mode is going of please fix the bug
+the bar at the right bottom when we click download it doesnt Downloads the images

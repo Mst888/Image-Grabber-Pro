@@ -11,6 +11,18 @@
   }
 
   const STORAGE_KEY = 'ibd_selectedImages_v1';
+  const QUALITY_KEY = 'ibd_jpegQuality_v1';
+  const FORMAT_KEY = 'ibd_outputFormat_v1';
+  const FOLDER_KEY = 'ibd_folderName_v1';
+  const USE_SUBFOLDER_KEY = 'ibd_useSubfolder_v1';
+  const ASK_LOCATION_KEY = 'ibd_askLocation_v1';
+  const BATCH_SIZE_KEY = 'ibd_batchSize_v1';
+  const DELAY_KEY = 'ibd_downloadDelay_v1';
+  const LAZY_KEY = 'ibd_lazyProcess_v1';
+  const LOW_PERF_KEY = 'ibd_lowPerf_v1';
+  const NAMING_KEY = 'ibd_namingMode_v1';
+  const TEMPLATE_KEY = 'ibd_customTemplate_v1';
+  const ZIP_KEY = 'ibd_zipEnabled_v1';
   const inFlight = new Set();
   const DEFAULT_FETCH_TIMEOUT_MS = 25000;
 
@@ -169,8 +181,38 @@
       return true;
     }
     if (msg.type === 'IBD_DOWNLOAD_REQUEST_FROM_PAGE') {
-      // Not implemented for page yet, would need full settings fetch
-      sendResponse({ ok: false, error: 'Please use the extension popup for advanced downloads.' });
+      (async () => {
+        const stored = await api.storage.local.get([
+          STORAGE_KEY, QUALITY_KEY, FORMAT_KEY, FOLDER_KEY, USE_SUBFOLDER_KEY, ASK_LOCATION_KEY,
+          BATCH_SIZE_KEY, DELAY_KEY, LAZY_KEY, LOW_PERF_KEY, NAMING_KEY, TEMPLATE_KEY, ZIP_KEY
+        ]);
+
+        const selection = Array.isArray(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
+        if (!selection.length) return sendResponse({ ok: false, error: 'No images selected.' });
+
+        const pageTitle = (sender.tab && sender.tab.title) ? sender.tab.title.substring(0, 50).replace(/[\\/:*?"<>|]/g, '_') : 'Images';
+        const site = (sender.tab && sender.tab.url) ? new URL(sender.tab.url).hostname : 'any';
+
+        const payload = {
+          urls: selection,
+          quality: Number(stored[QUALITY_KEY] ?? 90),
+          downloadLocation: stored[ASK_LOCATION_KEY] ? 'ask' : 'default',
+          format: stored[FORMAT_KEY] || 'original',
+          folderName: stored[USE_SUBFOLDER_KEY] ? (stored[FOLDER_KEY] || '') : '',
+          batchSize: Number(stored[BATCH_SIZE_KEY] || 5),
+          downloadDelay: Number(stored[DELAY_KEY] || 100),
+          lazy: !!stored[LAZY_KEY],
+          lowPerf: !!stored[LOW_PERF_KEY],
+          namingMode: stored[NAMING_KEY] || 'auto',
+          customTemplate: stored[TEMPLATE_KEY] || '',
+          zipBundle: !!stored[ZIP_KEY],
+          pageTitle,
+          site
+        };
+
+        const result = await handleDownloadSelected(payload);
+        sendResponse(result);
+      })();
       return true;
     }
   });

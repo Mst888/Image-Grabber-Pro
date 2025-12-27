@@ -22,6 +22,7 @@
   const MODE_KEY = 'ibd_selectionMode_v1';
   const NAMING_KEY = 'ibd_namingMode_v1';
   const ZIP_KEY = 'ibd_zipEnabled_v1';
+  const TEMPLATE_KEY = 'ibd_customTemplate_v1';
 
   const selectedCountEl = document.getElementById('selectedCount');
   const downloadBtn = document.getElementById('downloadBtn');
@@ -50,6 +51,8 @@
   const previewGalleryEl = document.getElementById('previewGallery');
   const previewDisabledMsg = document.getElementById('previewDisabledMsg');
   const namingModeEl = document.getElementById('namingMode');
+  const customNameField = document.getElementById('customNameField');
+  const customTemplateEl = document.getElementById('customTemplate');
   const zipDownloadToggleEl = document.getElementById('zipDownloadToggle');
 
   function setStatus(text, isError) {
@@ -162,6 +165,7 @@
     // New settings
     selectionModeEl.value = stored[MODE_KEY] || 'normal';
     namingModeEl.value = stored[NAMING_KEY] || 'auto';
+    customTemplateEl.value = stored[TEMPLATE_KEY] || '';
     zipDownloadToggleEl.checked = !!stored[ZIP_KEY];
 
     updateLocationVisibility();
@@ -253,6 +257,7 @@
   // New Listeners
   selectionModeEl.onchange = () => saveSetting(MODE_KEY, selectionModeEl.value);
   namingModeEl.onchange = () => { saveSetting(NAMING_KEY, namingModeEl.value); updateNamingVisibility(); };
+  customTemplateEl.oninput = () => saveSetting(TEMPLATE_KEY, customTemplateEl.value);
   zipDownloadToggleEl.onchange = () => saveSetting(ZIP_KEY, zipDownloadToggleEl.checked);
 
   enabledToggleEl.onchange = async () => {
