@@ -16,7 +16,7 @@ Hızlı seçim araçları, filtreler ve toplu indirme iş akışıyla yüzlerce 
 - Same Size Mode & Smart Filters: Aynı boyut/çözünürlükteki görselleri yakalayın  
 - ZIP bundling + Akıllı İsimlendirme: `{site}`, `{title}`, `{index}` değişkenleri  
 - Kompakt Popup (300x500) + Floating Toolbar  
-- Temalar: Onyx Gray, Spotify Green, Classic Blue
+- Temalar: Onyx Gray, Green, Classic Blue
 
 ---
 
@@ -135,3 +135,4 @@ README’ye 10–20s’lik bir GIF veya kısa video eklerseniz dönüşüm çok 
 - Lisans: MIT  
 - Author: Mst888  
 - Version: 1.7.1
+
