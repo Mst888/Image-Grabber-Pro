@@ -52,7 +52,9 @@ The resulting package will be in the `web-ext-artifacts/` directory.
 
 ## License
 This project is licensed under the MIT License.
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **Author**: Mst888 
 **Version**: 1.7.1
+
 
