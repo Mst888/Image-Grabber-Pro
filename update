@@ -1,0 +1,155 @@
+You are a senior browser extension developer.
+
+I have a browser extension with:
+- Image selection
+- Preview panel
+- Selection modes
+- ZIP download
+- Smart file naming
+- Aspect ratio control
+- Theme system
+- Low performance mode
+- Settings panel
+- Chrome & Firefox compatibility
+
+Now I want to add a **Keyboard Shortcut System** inside the Settings panel.
+
+================================================
+GOAL
+================================================
+
+Allow users to:
+- Define custom keyboard shortcuts
+- Control extension actions faster
+- Enable / disable shortcuts
+- Save shortcuts permanently
+
+This feature must be stable, fast, and user-friendly.
+
+================================================
+FEATURE 1 – SHORTCUT SETTINGS PANEL
+================================================
+
+Add a new section inside **Settings**:
+
+Title:
+⌨️ Keyboard Shortcuts
+
+This section must include:
+
+- Toggle:
+  ✅ Enable keyboard shortcuts
+- List of configurable actions
+- Button to edit shortcut
+- Button to reset to default
+
+================================================
+FEATURE 2 – SHORTCUT ACTIONS
+
+Add shortcuts for:
+
+1. Toggle image selection mode  
+2. Select all images  
+3. Clear selection  
+4. Download images  
+5. Download as ZIP  
+6. Toggle preview panel  
+7. Toggle low performance mode  
+
+Each action must support:
+- Custom key combination
+- Modifier keys (Ctrl / Alt / Shift)
+- Cross-platform compatibility
+
+================================================
+FEATURE 3 – SHORTCUT INPUT SYSTEM
+
+When user clicks “Set Shortcut”:
+- Listen for key combination
+- Show pressed keys visually
+- Prevent invalid combinations
+- Prevent conflicts
+- Allow cancel / reset
+
+Example:
+Ctrl + Shift + D
+
+
+================================================
+FEATURE 4 – STORAGE & PERSISTENCE
+
+Shortcuts must be:
+- Saved using storage API
+- Loaded on extension start
+- Editable anytime
+- Resettable to defaults
+
+================================================
+FEATURE 5 – SHORTCUT EXECUTION
+
+Shortcuts must:
+- Work globally while popup is open
+- Trigger correct action
+- Respect Low Performance Mode
+- Not interfere with page shortcuts
+
+Use:
+- Key event listeners
+- Debounce logic
+- Safe key matching
+
+================================================
+FEATURE 6 – PERFORMANCE RULES
+
+- No polling
+- No heavy listeners
+- One global key handler
+- Disabled automatically when popup is closed
+- Minimal memory usage
+
+================================================
+FEATURE 7 – UI REQUIREMENTS
+
+Settings UI must:
+- Match current theme
+- Be clean and readable
+- Show active shortcuts clearly
+- Allow reset to defaults
+- Work smoothly on low-end devices
+
+================================================
+FILES TO UPDATE
+================================================
+
+Update only:
+- popup.html
+- popup.js
+- style.css
+
+Do NOT rewrite unrelated code.
+
+================================================
+OUTPUT REQUIREMENTS
+================================================
+
+Return:
+- Full working code
+- No pseudocode
+- Clean structure
+- Well commented
+- Production ready
+- Chrome & Firefox compatible
+
+================================================
+FINAL INSTRUCTION
+================================================
+
+Implement the keyboard shortcut system step by step.
+
+Focus on:
+- Usability
+- Performance
+- Stability
+- Clean architecture
+
+Start immediately.
