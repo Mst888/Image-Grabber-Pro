@@ -51,4 +51,4 @@ The resulting package will be in the `web-ext-artifacts/` directory.
 - **Human Readable**: The code is provided in its original form for full transparency.
 
 **Author**: Mst888 
-**Version**: 1.6.4
+**Version**: 1.6.5

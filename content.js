@@ -335,7 +335,7 @@
     root.querySelector('[data-ibd-download]').onclick = () => { api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }); };
   }
 
-  api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  api.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
     if (msg.type === 'IBD_SET_ENABLED') {
       settingsCache.enabled = !!msg.payload?.enabled;
       if (!settingsCache.enabled) {
@@ -346,6 +346,19 @@
       sendResponse({ ok: true });
     } else if (msg.type === 'IBD_SYNC_HIGHLIGHTS' || msg.type === 'IBD_CLEAR_SELECTION') {
       if (msg.type === 'IBD_CLEAR_SELECTION') setSelection([]);
+      syncHighlights();
+      sendResponse({ ok: true });
+    } else if (msg.type === 'IBD_SELECT_ALL') {
+      const imgs = document.querySelectorAll('img');
+      const toSelect = [];
+      imgs.forEach(img => {
+        const url = getCandidateImgUrl(img);
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (url && w >= 32 && h >= 32) toSelect.push(url);
+      });
+      const current = await getSelection();
+      await setSelection([...current, ...toSelect]);
       syncHighlights();
       sendResponse({ ok: true });
     }
