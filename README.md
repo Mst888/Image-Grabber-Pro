@@ -2,7 +2,7 @@
 
 Photo-Grab: A professional browser extension for quickly selecting and bulk-downloading high-resolution images from web pages, with smart naming and ZIP packaging — ideal for content creators, researchers, and visual collectors.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Version: 1.7.1](https://img.shields.io/badge/Version-1.7.1-blue)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Version: 1.7.1](https://img.shields.io/badge/Version-1.7.1-blue)[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-orange)]((https://www.buymeacoffee.com/mst888))
 
 ---
 
@@ -176,6 +176,7 @@ Note: A manifest alone is not sufficient — all referenced files must be in the
 - License: MIT  
 - Author: Mst888  
 - Version: 1.7.1
+
 
 
 
