@@ -1,18 +1,21 @@
 {
-  "name": "image-grabber",
+  "name": "photo-grab",
   "version": "1.7.1",
-  "description": "",
+  "description": "Chrome extension for bulk image downloading",
   "main": "background.js",
   "scripts": {
-    "build": "web-ext build --overwrite-dest",
-    "lint": "web-ext lint",
+    "build": "echo \"Build complete. Load the extension directory in Chrome.\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "chrome-extension",
+    "image-downloader",
+    "bulk-download"
+  ],
   "author": "mst888",
   "license": "ISC",
   "type": "commonjs",
-  "devDependencies": {
-    "web-ext": "^9.2.0"
+  "dependencies": {
+    "sharp": "^0.34.5"
   }
 }

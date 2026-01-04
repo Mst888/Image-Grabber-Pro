@@ -1,5 +1,4 @@
 (() => {
-  const api = typeof browser !== 'undefined' ? browser : chrome;
 
   const STORAGE_KEY = 'ibd_selectedImages_v1';
   const QUALITY_KEY = 'ibd_jpegQuality_v1';
@@ -134,15 +133,15 @@
   }
 
   async function getActiveTabId() {
-    const tabs = await api.tabs.query({ active: true, currentWindow: true });
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return (tabs && tabs[0] && tabs[0].id) || null;
   }
 
   async function renderPreviewGallery() {
-    const storedPerf = await api.storage.local.get(LOW_PERF_KEY);
+    const storedPerf = await chrome.storage.local.get(LOW_PERF_KEY);
     if (storedPerf[LOW_PERF_KEY]) return;
 
-    const stored = await api.storage.local.get(STORAGE_KEY);
+    const stored = await chrome.storage.local.get(STORAGE_KEY);
     const selection = Array.isArray(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
 
     els.previewGallery.innerHTML = '';
@@ -160,12 +159,12 @@
       remove.textContent = '×';
 
       container.onclick = async () => {
-        const current = await api.storage.local.get(STORAGE_KEY);
+        const current = await chrome.storage.local.get(STORAGE_KEY);
         const list = Array.isArray(current[STORAGE_KEY]) ? current[STORAGE_KEY] : [];
         const filtered = list.filter(u => u !== url);
-        await api.storage.local.set({ [STORAGE_KEY]: filtered });
+        await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
         const tabId = await getActiveTabId();
-        if (tabId) try { await api.tabs.sendMessage(tabId, { type: 'IBD_SYNC_HIGHLIGHTS' }); } catch (_) { }
+        if (tabId) try { await chrome.tabs.sendMessage(tabId, { type: 'IBD_SYNC_HIGHLIGHTS' }); } catch (_) { }
         updateSelectedCount();
       };
 
@@ -176,7 +175,7 @@
   }
 
   async function updateSelectedCount() {
-    const stored = await api.storage.local.get(STORAGE_KEY);
+    const stored = await chrome.storage.local.get(STORAGE_KEY);
     const selection = Array.isArray(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
     els.selectedCount.textContent = String(selection.length);
     els.downloadBtn.disabled = selection.length === 0;
@@ -184,7 +183,7 @@
   }
 
   async function loadSettings() {
-    const stored = await api.storage.local.get([
+    const stored = await chrome.storage.local.get([
       ENABLED_KEY, QUALITY_KEY, FORMAT_KEY, FOLDER_KEY, USE_SUBFOLDER_KEY, ASK_LOCATION_KEY,
       LOW_PERF_KEY, PREVIEW_KEY, OVERLAY_KEY, BATCH_SIZE_KEY, DELAY_KEY, MAX_SELECT_KEY, LAZY_KEY,
       THEME_KEY, MODE_KEY, NAMING_KEY, TEMPLATE_KEY, ZIP_KEY,
@@ -301,7 +300,7 @@
   }
 
   async function saveSetting(key, value) {
-    await api.storage.local.set({ [key]: value });
+    await chrome.storage.local.set({ [key]: value });
   }
 
   // --- SHORTCUTS LOGIC ---
@@ -382,7 +381,7 @@
         break;
       case 'selectAll':
         const tabId = await getActiveTabId();
-        if (tabId) try { await api.tabs.sendMessage(tabId, { type: 'IBD_SELECT_ALL' }); } catch (_) { }
+        if (tabId) try { await chrome.tabs.sendMessage(tabId, { type: 'IBD_SELECT_ALL' }); } catch (_) { }
         break;
       case 'clearSelection':
         if (els.clearBtn) els.clearBtn.click();
@@ -414,17 +413,18 @@
   }
 
   async function requestDownload() {
-    const stored = await api.storage.local.get(STORAGE_KEY);
+    const stored = await chrome.storage.local.get(STORAGE_KEY);
     const selection = Array.isArray(stored[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
+    console.log('[Photo-Grab Debug] Popup requesting download with', selection.length, 'URLs:', selection.slice(0, 2));
     if (!selection.length) return setStatus('No images selected.', true);
 
-    const settings = await api.storage.local.get([
+    const settings = await chrome.storage.local.get([
       QUALITY_KEY, FORMAT_KEY, FOLDER_KEY, USE_SUBFOLDER_KEY, ASK_LOCATION_KEY,
       BATCH_SIZE_KEY, DELAY_KEY, LAZY_KEY, LOW_PERF_KEY, NAMING_KEY, TEMPLATE_KEY, ZIP_KEY,
       ASPECT_RATIO_KEY, CUSTOM_RATIO_W_KEY, CUSTOM_RATIO_H_KEY, CROP_MODE_KEY
     ]);
 
-    const tab = (await api.tabs.query({ active: true, currentWindow: true }))[0];
+    const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
     const pageTitle = (tab && tab.title) ? tab.title.substring(0, 50).replace(/[\\/:*?"<>|]/g, '_') : 'Images';
     const site = (tab && tab.url) ? new URL(tab.url).hostname : 'any';
 
@@ -451,15 +451,18 @@
     };
 
     try {
-      const res = await api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_SELECTED', payload });
+      const res = await chrome.runtime.sendMessage({ type: 'IBD_DOWNLOAD_SELECTED', payload });
       if (res && res.ok) {
-        setStatus('Downloads started!');
+        const msg = res.message || 'Downloads started!';
+        setStatus(msg);
         setTimeout(() => {
           setStatus('');
           if (!els.stayOpenToggle?.checked) window.close();
         }, 1500);
       } else if (res && res.failures) {
-        setStatus(`Failed to download ${res.failures.length} images.`, true);
+        const msg = res.message || `Failed to download ${res.failures.length} images.`;
+        setStatus(msg, true);
+        console.error('[Photo-Grab Popup] Download failures:', res.failures);
       } else {
         setStatus('Error: ' + (res?.error || 'Unknown error'), true);
       }
@@ -523,7 +526,10 @@
   if (els.maxSelection) els.maxSelection.onchange = () => saveSetting(MAX_SELECT_KEY, Number(els.maxSelection.value));
   if (els.lazyProcessToggle) els.lazyProcessToggle.onchange = () => saveSetting(LAZY_KEY, els.lazyProcessToggle.checked);
 
-  if (els.selectionMode) els.selectionMode.onchange = () => saveSetting(MODE_KEY, els.selectionMode.value);
+  if (els.selectionMode) els.selectionMode.onchange = () => {
+    console.log('[Photo-Grab Debug] Selection mode changed in popup to:', els.selectionMode.value);
+    saveSetting(MODE_KEY, els.selectionMode.value);
+  };
   if (els.namingMode) {
     els.namingMode.onchange = () => {
       saveSetting(NAMING_KEY, els.namingMode.value);
@@ -548,13 +554,13 @@
       const enabled = els.enabledToggle.checked;
       await saveSetting(ENABLED_KEY, enabled);
       const tabId = await getActiveTabId();
-      if (tabId) try { await api.tabs.sendMessage(tabId, { type: 'IBD_SET_ENABLED', payload: { enabled } }); } catch (_) { }
+      if (tabId) try { await chrome.tabs.sendMessage(tabId, { type: 'IBD_SET_ENABLED', payload: { enabled } }); } catch (_) { }
       if (!enabled) {
         if (els.clearOnDisableToggle?.checked) {
           await saveSetting(STORAGE_KEY, []);
           await updateSelectedCount();
           const tabId = await getActiveTabId();
-          if (tabId) try { await api.tabs.sendMessage(tabId, { type: 'IBD_CLEAR_SELECTION' }); } catch (_) { }
+          if (tabId) try { await chrome.tabs.sendMessage(tabId, { type: 'IBD_CLEAR_SELECTION' }); } catch (_) { }
         }
         setStatus('Selection off.');
       }
@@ -564,9 +570,9 @@
 
   if (els.clearBtn) {
     els.clearBtn.onclick = async () => {
-      await api.storage.local.set({ [STORAGE_KEY]: [] });
+      await chrome.storage.local.set({ [STORAGE_KEY]: [] });
       const tabId = await getActiveTabId();
-      if (tabId) try { await api.tabs.sendMessage(tabId, { type: 'IBD_CLEAR_SELECTION' }); } catch (_) { }
+      if (tabId) try { await chrome.tabs.sendMessage(tabId, { type: 'IBD_CLEAR_SELECTION' }); } catch (_) { }
       updateSelectedCount();
       setStatus('Cleared.');
     };
@@ -587,7 +593,7 @@
   }
   if (els.popupWidth) els.popupWidth.oninput = () => { saveSetting(POPUP_WIDTH_KEY, Number(els.popupWidth.value)); applyPopupSize(); };
   if (els.popupHeight) els.popupHeight.oninput = () => { saveSetting(POPUP_HEIGHT_KEY, Number(els.popupHeight.value)); applyPopupSize(); };
-  if (els.githubBtn) els.githubBtn.onclick = () => api.tabs.create({ url: 'https://github.com/Mst888/Photo-Grab' });
+  if (els.githubBtn) els.githubBtn.onclick = () => chrome.tabs.create({ url: 'https://github.com/Mst888/Photo-Grab' });
 
   if (els.shortcutsToggle) els.shortcutsToggle.onchange = () => saveSetting(SHORTCUTS_ENABLED_KEY, els.shortcutsToggle.checked);
   if (els.resetShortcutsBtn) {
@@ -604,7 +610,7 @@
     });
   }
 
-  api.storage.onChanged.addListener((changes, area) => {
+  chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes[STORAGE_KEY]) updateSelectedCount();
     if (changes[LOW_PERF_KEY]) updateLowPerfUI(!!changes[LOW_PERF_KEY].newValue);

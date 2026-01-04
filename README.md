@@ -2,7 +2,7 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/Mst888/Photo-Grab?style=flat-square)](https://github.com/Mst888/Photo-Grab/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://github.com/Mst888/Photo-Grab/blob/main/LICENSE) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-☕-ff813f?style=flat-square&logo=buymeacoffee)](https://buymeacoffee.com/mst888)
 
-A fast, elegant browser extension for power users who want to pick, organize, and download images from the web in bulk — without the fuss.
+A fast, elegant Chrome extension for power users who want to pick, organize, and download images from the web in bulk — without the fuss.
 
 ---
 
@@ -40,32 +40,29 @@ Photo-Grab was built for people who collect images — researchers, designers, a
 
 ## 🚀 Quick Start
 
-1. Install the extension from your browser's developer mode (load unpacked) or from the releases page:
-   - [Releases](https://github.com/Mst888/Photo-Grab/releases)
+1. Install the extension in Chrome:
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" (toggle in top right)
+   - Click "Load unpacked" and select the extension directory
+   - Or download from [Releases](https://github.com/Mst888/Photo-Grab/releases)
 2. Open a webpage with images.
 3. Click the toolbar icon, choose your selection mode (area / same-size / filters), then download as ZIP or individually.
 
 ---
 
-## 🛠️ Build Instructions
+## 🛠️ Installation for Chrome
 
-This repository contains the source code for Photo-Grab. To build from source:
+This repository contains the source code for Photo-Grab Chrome extension.
 
-### 1. Environment Requirements
-- Node.js: v18.x or higher
-- npm: v9.x or higher
+### Loading the Extension
+1. Clone or download this repository
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode" in the top right
+4. Click "Load unpacked"
+5. Select the extension directory
 
-### 2. Installation
-```bash
-npm install
-```
-
-### 3. Packaging
-To generate a distributable `.zip`:
-```bash
-npm run build
-```
-The resulting package will be in the `web-ext-artifacts/` directory.
+### Creating a ZIP Package
+To create a distributable package, simply zip the extension directory (excluding `node_modules`, `.git`, etc.).
 
 ---
 

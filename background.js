@@ -1,14 +1,13 @@
-(() => {
-  const api = typeof browser !== 'undefined' ? browser : chrome;
-
-  // For compatibility with some MV3 environments (like Chrome)
-  try {
-    if (typeof JSZip === 'undefined' && typeof importScripts !== 'undefined') {
-      importScripts('jszip.min.js');
-    }
-  } catch (e) {
-    console.warn('JSZip could not be pre-loaded:', e);
+// Import JSZip for Chrome service worker
+try {
+  if (typeof JSZip === 'undefined' && typeof importScripts !== 'undefined') {
+    importScripts('jszip.min.js');
   }
+} catch (e) {
+  console.warn('JSZip could not be pre-loaded:', e);
+}
+
+(() => {
 
   const STORAGE_KEY = 'ibd_selectedImages_v1';
   const QUALITY_KEY = 'ibd_jpegQuality_v1';
@@ -32,6 +31,12 @@
 
   function isValidHttpUrl(url) {
     try {
+      // Support data URLs (base64 encoded images) and blob URLs
+      if (url && typeof url === 'string') {
+        if (url.startsWith('data:image/') || url.startsWith('blob:')) {
+          return true;
+        }
+      }
       const u = new URL(url);
       return u.protocol === 'http:' || u.protocol === 'https:';
     } catch (_) { return false; }
@@ -61,13 +66,49 @@
   }
 
   async function fetchAsBlob(url, timeoutMs) {
+    // Handle data URLs directly
+    if (url && url.startsWith('data:')) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Data URL fetch failed: ${res.status}`);
+        return await res.blob();
+      } catch (err) {
+        throw new Error(`Data URL error: ${err.message}`);
+      }
+    }
+    
+    // Handle blob URLs
+    if (url && url.startsWith('blob:')) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Blob URL fetch failed: ${res.status}`);
+        return await res.blob();
+      } catch (err) {
+        throw new Error(`Blob URL error: ${err.message}`);
+      }
+    }
+    
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal });
-      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       return await res.blob();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Timeout after ${timeoutMs || DEFAULT_FETCH_TIMEOUT_MS}ms`);
+      }
+      throw new Error(`Network error: ${err.message}`);
     } finally { clearTimeout(timeout); }
+  }
+
+  function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   async function convertToFormat(blob, format, qualityPercent, aspectRatio, cropMode, customW, customH) {
@@ -158,8 +199,13 @@
       site = 'any'
     } = payload;
 
+    console.log('[Photo-Grab Debug] Received URLs:', urls);
     const uniqueUrls = Array.from(new Set(urls.filter(isValidHttpUrl)));
-    if (!uniqueUrls.length) return { ok: false, error: 'No valid URLs.' };
+    console.log('[Photo-Grab Debug] Valid URLs after filtering:', uniqueUrls);
+    if (!uniqueUrls.length) {
+      console.error('[Photo-Grab Debug] No valid URLs found. Original URLs:', urls);
+      return { ok: false, error: 'No valid URLs.' };
+    }
 
     const batchKey = uniqueUrls.join('|');
     if (inFlight.has(batchKey)) return { ok: false, error: 'Download in progress.' };
@@ -182,13 +228,15 @@
             const filename = generateFilename({ namingMode, customTemplate, format }, i, pageTitle, site, ext);
             zip.file(filename, processed);
           } catch (err) {
+            console.error('[Photo-Grab] Failed to download:', url, err);
             failures.push({ url, error: err.message });
           }
         }
         const content = await zip.generateAsync({ type: 'blob' });
         const zipName = (folderName || pageTitle || 'images') + '.zip';
-        await api.downloads.download({
-          url: URL.createObjectURL(content),
+        const dataUrl = await blobToDataURL(content);
+        await chrome.downloads.download({
+          url: dataUrl,
           filename: zipName.replace(/[\\/:*?"<>|]/g, '_'),
           saveAs: downloadLocation === 'ask'
         });
@@ -204,16 +252,16 @@
               const ext = format === 'original' ? (url.split('.').pop().split(/[?#]/)[0] || 'jpg') : (format === 'jpeg' ? 'jpg' : format);
               const filename = generateFilename({ namingMode, customTemplate, format }, globalIdx, pageTitle, site, ext);
 
-              const objectUrl = URL.createObjectURL(processed);
+              const dataUrl = await blobToDataURL(processed);
               const finalPath = folderName ? `${folderName.replace(/[\\/:*?"<>|]/g, '_')}/${filename}` : filename;
-              await api.downloads.download({
-                url: objectUrl,
+              await chrome.downloads.download({
+                url: dataUrl,
                 filename: finalPath,
                 saveAs: downloadLocation === 'ask',
                 conflictAction: 'uniquify'
               });
-              setTimeout(() => URL.revokeObjectURL(objectUrl), 15000);
             } catch (err) {
+              console.error('[Photo-Grab] Failed to download:', url, err);
               failures.push({ url, error: err.message });
             }
           }));
@@ -223,8 +271,20 @@
         }
       }
 
-      await api.storage.local.set({ [STORAGE_KEY]: [] });
-      return failures.length ? { ok: false, failures } : { ok: true };
+      await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+      
+      if (failures.length) {
+        console.error('[Photo-Grab] Download completed with failures:', failures.length, 'failed out of', uniqueUrls.length);
+        console.error('[Photo-Grab] Failed URLs:', failures);
+        return { 
+          ok: false, 
+          failures,
+          message: `Failed to download ${failures.length} out of ${uniqueUrls.length} images. Check console for details.`
+        };
+      }
+      
+      console.log('[Photo-Grab] All downloads completed successfully');
+      return { ok: true, message: `Successfully downloaded ${uniqueUrls.length} images` };
     } catch (err) {
       return { ok: false, error: err.message };
     } finally {
@@ -232,14 +292,14 @@
     }
   }
 
-  api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'IBD_DOWNLOAD_SELECTED') {
       handleDownloadSelected(msg.payload).then(sendResponse);
       return true;
     }
     if (msg.type === 'IBD_DOWNLOAD_REQUEST_FROM_PAGE') {
       (async () => {
-        const stored = await api.storage.local.get([
+        const stored = await chrome.storage.local.get([
           STORAGE_KEY, QUALITY_KEY, FORMAT_KEY, FOLDER_KEY, USE_SUBFOLDER_KEY, ASK_LOCATION_KEY,
           BATCH_SIZE_KEY, DELAY_KEY, LAZY_KEY, LOW_PERF_KEY, NAMING_KEY, TEMPLATE_KEY, ZIP_KEY,
           ASPECT_RATIO_KEY, CUSTOM_RATIO_W_KEY, CUSTOM_RATIO_H_KEY, CROP_MODE_KEY

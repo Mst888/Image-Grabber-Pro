@@ -1,5 +1,26 @@
 (() => {
-  const api = typeof browser !== 'undefined' ? browser : chrome;
+
+  // Check if extension context is valid
+  function isExtensionValid() {
+    return !!(chrome && chrome.runtime && chrome.runtime.id);
+  }
+
+  // Safe wrapper for chrome API calls
+  async function safeChromeCall(fn, fallback = null) {
+    if (!isExtensionValid()) {
+      console.warn('[Photo-Grab] Extension context invalidated. Please refresh the page.');
+      return fallback;
+    }
+    try {
+      return await fn();
+    } catch (err) {
+      if (err.message && err.message.includes('Extension context invalidated')) {
+        console.warn('[Photo-Grab] Extension reloaded. Please refresh the page.');
+        return fallback;
+      }
+      throw err;
+    }
+  }
 
   const STORAGE_KEY = 'ibd_selectedImages_v1';
   const ATTR_SELECTED = 'data-ibd-selected';
@@ -53,6 +74,12 @@
   function resolveUrl(maybeUrl) {
     const norm = normalizeUrl(maybeUrl);
     if (!norm) return null;
+    
+    // Don't try to resolve data: or blob: URLs - they're already absolute
+    if (norm.startsWith('data:') || norm.startsWith('blob:')) {
+      return norm;
+    }
+    
     try {
       return new URL(norm, document.baseURI).toString();
     } catch (_) {
@@ -89,32 +116,54 @@
     if (!imgEl) return null;
     const picture = imgEl.closest('picture');
     if (picture) {
-      const source = picture.querySelector('source');
-      if (source) {
-        const url = pickBestSrcsetUrl(source.getAttribute('srcset') || source.getAttribute('data-srcset'));
-        if (url) return url;
+      const sources = picture.querySelectorAll('source[srcset]');
+      for (const src of sources) {
+        const best = pickBestSrcsetUrl(src.getAttribute('srcset'));
+        if (best) return best;
       }
     }
-    const srcset = imgEl.getAttribute('srcset') || imgEl.getAttribute('data-srcset');
-    const srcsetBest = pickBestSrcsetUrl(srcset);
+    const srcset = imgEl.getAttribute('srcset');
+    const srcsetBest = srcset ? pickBestSrcsetUrl(srcset) : null;
     if (srcsetBest) return srcsetBest;
-    const candidates = [imgEl.currentSrc, imgEl.src, imgEl.getAttribute('src'), imgEl.getAttribute('data-src')];
+    
+    // Extended list of attributes for lazy loading and various image sources
+    const candidates = [
+      imgEl.currentSrc, 
+      imgEl.src, 
+      imgEl.getAttribute('src'),
+      imgEl.getAttribute('data-src'),
+      imgEl.getAttribute('data-lazy-src'),
+      imgEl.getAttribute('data-original'),
+      imgEl.getAttribute('data-fallback-src'),
+      imgEl.getAttribute('data-lazy'),
+      imgEl.getAttribute('data-srcset')
+    ];
+    
     for (const c of candidates) {
       const norm = resolveUrl(c);
-      if (norm) return norm;
+      if (norm) {
+        return norm;
+      }
     }
     return null;
   }
 
   async function getSelection() {
-    const result = await api.storage.local.get(STORAGE_KEY);
-    return Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+    return safeChromeCall(async () => {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const selection = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+      console.log('[Photo-Grab Debug] Retrieved from storage:', selection.length, 'URLs');
+      return selection;
+    }, []);
   }
 
   async function setSelection(urls) {
-    const unique = Array.from(new Set(urls.filter(Boolean))).slice(0, settingsCache.maxSelection);
-    await api.storage.local.set({ [STORAGE_KEY]: unique });
-    return unique;
+    return safeChromeCall(async () => {
+      const unique = Array.from(new Set(urls.filter(Boolean))).slice(0, settingsCache.maxSelection);
+      console.log('[Photo-Grab Debug] Saving to storage:', unique.length, 'URLs');
+      await chrome.storage.local.set({ [STORAGE_KEY]: unique });
+      return unique;
+    }, []);
   }
 
   // --- UI HELPERS ---
@@ -192,15 +241,28 @@
   }
 
   async function toggleUrl(url) {
-    if (!settingsCache.enabled) return;
+    if (!settingsCache.enabled) {
+      console.warn('[Photo-Grab Debug] Toggle blocked - extension not enabled');
+      return;
+    }
     const norm = normalizeUrl(url);
-    if (!norm) return;
+    if (!norm) {
+      console.warn('[Photo-Grab Debug] Toggle blocked - invalid URL:', url);
+      return;
+    }
+    console.log('[Photo-Grab Debug] Toggling URL:', norm);
     const selection = await getSelection();
     const set = new Set(selection);
-    if (set.has(norm)) set.delete(norm);
-    else {
-      if (set.size >= settingsCache.maxSelection) return;
+    if (set.has(norm)) {
+      set.delete(norm);
+      console.log('[Photo-Grab Debug] Removed URL from selection');
+    } else {
+      if (set.size >= settingsCache.maxSelection) {
+        console.warn('[Photo-Grab Debug] Max selection reached:', settingsCache.maxSelection);
+        return;
+      }
       set.add(norm);
+      console.log('[Photo-Grab Debug] Added URL to selection');
     }
     await setSelection(Array.from(set));
     syncHighlights();
@@ -290,10 +352,12 @@
   }
 
   function updateModeListeners() {
+    console.log('[Photo-Grab Debug] updateModeListeners called - enabled:', settingsCache.enabled, 'mode:', settingsCache.mode);
     document.removeEventListener('mousedown', onMouseDown, true);
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('mouseup', onMouseUp, true);
     if (settingsCache.enabled && settingsCache.mode === 'area') {
+      console.log('[Photo-Grab Debug] Area mode listeners attached');
       document.addEventListener('mousedown', onMouseDown, true);
       document.addEventListener('mousemove', onMouseMove, true);
       document.addEventListener('mouseup', onMouseUp, true);
@@ -308,6 +372,7 @@
     if (settingsCache.mode === 'area') return;
 
     if (target.tagName === 'IMG') {
+      console.log('[Photo-Grab Debug] Image clicked, mode:', settingsCache.mode);
       if (settingsCache.mode === 'sameSize') {
         e.preventDefault(); e.stopPropagation();
         await handleSameSizeSelection(target);
@@ -316,10 +381,16 @@
       if (settingsCache.mode === 'large') {
         const w = target.naturalWidth || target.width;
         const h = target.naturalHeight || target.height;
-        if (w < 800 && h < 600) return;
+        console.log('[Photo-Grab Debug] Image size:', w, 'x', h);
+        if (w < 800 && h < 600) {
+          console.log('[Photo-Grab Debug] Image too small for large mode');
+          return;
+        }
       }
       e.preventDefault(); e.stopPropagation();
-      await toggleUrl(getCandidateImgUrl(target));
+      const imgUrl = getCandidateImgUrl(target);
+      console.log('[Photo-Grab Debug] Extracted image URL:', imgUrl);
+      await toggleUrl(imgUrl);
     } else if (settingsCache.mode === 'normal') {
       const bgUrl = extractUrlFromBackgroundImage(window.getComputedStyle(target).backgroundImage);
       if (bgUrl) {
@@ -348,10 +419,14 @@
     `;
     document.documentElement.appendChild(root);
     root.querySelector('[data-ibd-clear]').onclick = async () => { await setSelection([]); syncHighlights(); };
-    root.querySelector('[data-ibd-download]').onclick = () => { api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }); };
+    root.querySelector('[data-ibd-download]').onclick = () => { 
+      if (isExtensionValid()) {
+        chrome.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' });
+      }
+    };
   }
 
-  api.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
     if (msg.type === 'IBD_SET_ENABLED') {
       settingsCache.enabled = !!msg.payload?.enabled;
       if (!settingsCache.enabled) {
@@ -387,7 +462,9 @@
 
     switch (action) {
       case 'toggleSelection':
-        await api.storage.local.set({ [ENABLED_KEY]: !settingsCache.enabled });
+        await safeChromeCall(async () => {
+          await chrome.storage.local.set({ [ENABLED_KEY]: !settingsCache.enabled });
+        });
         break;
       case 'selectAll':
         if (!settingsCache.enabled) return;
@@ -409,29 +486,41 @@
         syncHighlights();
         break;
       case 'download':
-        if (!settingsCache.enabled) return;
-        api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }, (res) => {
+        if (!settingsCache.enabled || !isExtensionValid()) return;
+        chrome.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }, (res) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[Photo-Grab] Extension context invalidated');
+            return;
+          }
           if (res && !res.ok) alert('Photo-Grab: ' + (res.error || 'Download failed'));
         });
         break;
       case 'downloadZip':
-        if (!settingsCache.enabled) return;
-        // Check if ZIP is enabled, if not enable it temporarily or just trigger download
-        // For now, trigger standard download request which respects popup settings (but popup is closed)
-        // Ideally we would toggle the ZIP setting in storage then request download
+        if (!settingsCache.enabled || !isExtensionValid()) return;
         const zipKey = 'ibd_zipEnabled_v1';
-        await api.storage.local.set({ [zipKey]: true });
-        api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }, (res) => {
-          if (res && !res.ok) alert('Photo-Grab: ' + (res.error || 'ZIP Download failed'));
+        await safeChromeCall(async () => {
+          await chrome.storage.local.set({ [zipKey]: true });
         });
+        if (isExtensionValid()) {
+          chrome.runtime.sendMessage({ type: 'IBD_DOWNLOAD_REQUEST_FROM_PAGE' }, (res) => {
+            if (chrome.runtime.lastError) {
+              console.warn('[Photo-Grab] Extension context invalidated');
+              return;
+            }
+            if (res && !res.ok) alert('Photo-Grab: ' + (res.error || 'ZIP Download failed'));
+          });
+        }
         break;
       case 'toggleLowPerf':
-        await api.storage.local.set({ [LOW_PERF_KEY]: !settingsCache.lowPerf });
+        await safeChromeCall(async () => {
+          await chrome.storage.local.set({ [LOW_PERF_KEY]: !settingsCache.lowPerf });
+        });
         break;
       case 'togglePreview':
-        // This is a popup-only setting mostly, but we can toggle it in storage
         const previewKey = 'ibd_previews_v1';
-        await api.storage.local.set({ [previewKey]: !settingsCache.previews });
+        await safeChromeCall(async () => {
+          await chrome.storage.local.set({ [previewKey]: !settingsCache.previews });
+        });
         break;
     }
   }
@@ -457,10 +546,17 @@
   });
 
   async function init() {
-    const stored = await api.storage.local.get([
-      ENABLED_KEY, LOW_PERF_KEY, PREVIEW_KEY, OVERLAY_KEY, MAX_SELECT_KEY, THEME_KEY, MODE_KEY,
-      SHORTCUTS_ENABLED_KEY, SHORTCUTS_DATA_KEY
-    ]);
+    if (!isExtensionValid()) {
+      console.warn('[Photo-Grab] Extension context not available');
+      return;
+    }
+    const stored = await safeChromeCall(async () => {
+      return await chrome.storage.local.get([
+        ENABLED_KEY, LOW_PERF_KEY, PREVIEW_KEY, OVERLAY_KEY, MAX_SELECT_KEY, THEME_KEY, MODE_KEY,
+        SHORTCUTS_ENABLED_KEY, SHORTCUTS_DATA_KEY
+      ]);
+    }, {});
+    
     settingsCache = {
       enabled: !!stored[ENABLED_KEY],
       lowPerf: !!stored[LOW_PERF_KEY],
@@ -472,14 +568,25 @@
       shortcutsEnabled: stored[SHORTCUTS_ENABLED_KEY] !== false,
       shortcuts: stored[SHORTCUTS_DATA_KEY] || { ...DEFAULT_SHORTCUTS }
     };
+    console.log('[Photo-Grab Debug] Initialized with mode:', settingsCache.mode, 'enabled:', settingsCache.enabled);
     if (settingsCache.enabled) { ensureToolbar(); syncHighlights(); updateModeListeners(); }
   }
 
-  api.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
+  if (isExtensionValid()) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!isExtensionValid() || area !== 'local') return;
     let needsSync = false;
-    if (changes[ENABLED_KEY]) { settingsCache.enabled = !!changes[ENABLED_KEY].newValue; updateModeListeners(); needsSync = true; }
-    if (changes[MODE_KEY]) { settingsCache.mode = changes[MODE_KEY].newValue || 'normal'; updateModeListeners(); needsSync = true; }
+    if (changes[ENABLED_KEY]) { 
+      settingsCache.enabled = !!changes[ENABLED_KEY].newValue; 
+      updateModeListeners(); 
+      needsSync = true; 
+    }
+    if (changes[MODE_KEY]) { 
+      settingsCache.mode = changes[MODE_KEY].newValue || 'normal'; 
+      console.log('[Photo-Grab Debug] Mode changed to:', settingsCache.mode);
+      updateModeListeners(); 
+      needsSync = true; 
+    }
     if (changes[SHORTCUTS_ENABLED_KEY]) { settingsCache.shortcutsEnabled = changes[SHORTCUTS_ENABLED_KEY].newValue !== false; }
     if (changes[SHORTCUTS_DATA_KEY]) { settingsCache.shortcuts = changes[SHORTCUTS_DATA_KEY].newValue || { ...DEFAULT_SHORTCUTS }; }
     if (changes[LOW_PERF_KEY]) { settingsCache.lowPerf = !!changes[LOW_PERF_KEY].newValue; needsSync = true; }
@@ -492,9 +599,10 @@
         tb.classList.add(`ibd-theme-${settingsCache.theme}`);
       }
     }
-    if (changes[STORAGE_KEY]) needsSync = true;
-    if (needsSync) syncHighlights();
-  });
+      if (changes[STORAGE_KEY]) needsSync = true;
+      if (needsSync) syncHighlights();
+    });
+  }
 
   init();
 })();
