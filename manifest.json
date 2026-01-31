@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Photo-Grab",
-  "version": "1.8.0",
+  "version": "1.8.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "image-grabber-pro@mesud.dev",
@@ -16,7 +16,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "downloads"
+    "downloads",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -26,7 +27,7 @@
   },
   "background": {
     "scripts": [
-      "jszip.min.js",
+      "jszip.js",
       "background.js"
     ]
   },

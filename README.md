@@ -85,4 +85,4 @@ If you find Photo-Grab useful, consider buying me a coffee to help fund improvem
 ---
 
 **Author:** Mst888  
-**Version:** 1.7.1
+**Version:** 1.8.2

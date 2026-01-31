@@ -179,6 +179,50 @@
     }
   }
 
+  async function blobToDataUrl(url, imgEl) {
+    if (!url || !url.startsWith('blob:')) return url;
+
+    // Attempt 1: Fetch (Standard)
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn('IBD: fetch failed for blob, trying canvas fallback:', e);
+
+      // Attempt 2: Canvas Fallback (Works if we have the img element and it's not cross-origin tainted)
+      // Blobs are same-origin, so they never taint the canvas.
+      if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgEl.naturalWidth;
+          canvas.height = imgEl.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgEl, 0, 0);
+          return canvas.toDataURL('image/png');
+        } catch (canvasErr) {
+          console.error('IBD: Canvas fallback failed:', canvasErr);
+        }
+      }
+      return url;
+    }
+  }
+
+  async function processUrls(items) {
+    // items can be array of URLs or array of {url, el}
+    const results = await Promise.all(items.map(async (item) => {
+      const url = typeof item === 'string' ? item : item.url;
+      const el = typeof item === 'object' ? item.el : null;
+      return blobToDataUrl(normalizeUrl(url), el);
+    }));
+    return results.filter(Boolean);
+  }
+
   async function syncHighlights() {
     const currentlyMarked = document.querySelectorAll(`[${ATTR_SELECTED}], span[${BADGE_ATTR}]`);
     currentlyMarked.forEach(el => {
@@ -188,22 +232,36 @@
     if (!settingsCache.enabled || (!settingsCache.overlays && !settingsCache.previews)) return;
     const selection = await getSelection();
     const selectedSet = new Set(selection);
+
+    // For blob-converted data urls, we might need a more flexible check
+    const dataUrlShortcuts = new Set(selection.filter(s => s.startsWith('data:')).map(s => s.substring(0, 50)));
+
     const imgs = document.querySelectorAll('img');
     imgs.forEach(img => {
       const url = getCandidateImgUrl(img);
-      if (url && selectedSet.has(url)) applyHighlight(img, true);
+      if (url) {
+        if (selectedSet.has(url) || (url.startsWith('blob:') && dataUrlShortcuts.has(url.substring(0, 50)))) {
+          applyHighlight(img, true);
+        }
+      }
     });
+
     const bgs = document.querySelectorAll('[style*="background-image"]');
     bgs.forEach(el => {
       const url = extractUrlFromBackgroundImage(el.style.backgroundImage);
-      if (url && selectedSet.has(url)) applyHighlight(el, true);
+      if (url) {
+        // Check if regular URL matches or if it's a blob that was converted
+        if (selectedSet.has(url) || (url.startsWith('blob:') && dataUrlShortcuts.has(url.substring(0, 50)))) {
+          applyHighlight(el, true);
+        }
+      }
     });
     updateToolbarCount(selection.length);
   }
 
-  async function toggleUrl(url) {
+  async function toggleUrl(url, el) {
     if (!settingsCache.enabled) return;
-    const norm = normalizeUrl(url);
+    const norm = await blobToDataUrl(normalizeUrl(url), el);
     if (!norm) return;
     const selection = await getSelection();
     const set = new Set(selection);
@@ -247,26 +305,19 @@
     const toSelect = [];
     imgs.forEach(img => {
       const imgRect = img.getBoundingClientRect();
-
-      // Filter out small logos/icons (e.g., < 32x32)
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       if (w < 32 || h < 32) return;
-
-      // Intersection check
-      const overlaps = !(imgRect.right < rect.left ||
-        imgRect.left > rect.right ||
-        imgRect.bottom < rect.top ||
-        imgRect.top > rect.bottom);
-
+      const overlaps = !(imgRect.right < rect.left || imgRect.left > rect.right || imgRect.bottom < rect.top || imgRect.top > rect.bottom);
       if (overlaps) {
         const url = getCandidateImgUrl(img);
-        if (url) toSelect.push(url);
+        if (url) toSelect.push({ url, el: img });
       }
     });
     if (toSelect.length) {
       const current = await getSelection();
-      await setSelection([...current, ...toSelect]);
+      const processed = await processUrls(toSelect);
+      await setSelection([...current, ...processed]);
       syncHighlights();
     }
   }
@@ -295,7 +346,8 @@
       }
     });
     const current = await getSelection();
-    await setSelection([...current, ...toSelect]);
+    const processed = await processUrls(toSelect);
+    await setSelection([...current, ...processed]);
     syncHighlights();
   }
 
@@ -329,7 +381,7 @@
         if (w < 800 && h < 600) return;
       }
       e.preventDefault(); e.stopPropagation();
-      await toggleUrl(getCandidateImgUrl(target));
+      await toggleUrl(getCandidateImgUrl(target), target);
     } else if (settingsCache.mode === 'normal') {
       const bgUrl = extractUrlFromBackgroundImage(window.getComputedStyle(target).backgroundImage);
       if (bgUrl) {
@@ -364,7 +416,7 @@
   function ensureConverterToolbar() {
     if (document.getElementById(CONVERTER_TOOLBAR_ID)) return;
     if (!settingsCache.converterEnabled || !settingsCache.converterToolbarVisible) return;
-    
+
     const root = document.createElement('div');
     root.id = CONVERTER_TOOLBAR_ID;
     if (settingsCache.theme) root.className = `ibd-theme-${settingsCache.theme}`;
@@ -401,7 +453,7 @@
       </div>
     `;
     document.documentElement.appendChild(root);
-    
+
     const fileInput = root.querySelector('#converterFileInput');
     const uploadBtn = root.querySelector('[data-converter-upload]');
     const convertBtn = root.querySelector('[data-converter-convert]');
@@ -412,15 +464,15 @@
     const preview = root.querySelector('[data-converter-preview]');
     const previewImg = root.querySelector('[data-converter-img]');
     const filenameDiv = root.querySelector('[data-converter-filename]');
-    
+
     let currentFile = null;
-    
+
     formatSelect.value = settingsCache.converterFormat;
     qualityRange.value = settingsCache.converterQuality;
     qualityVal.textContent = settingsCache.converterQuality + '%';
-    
+
     uploadBtn.onclick = () => fileInput.click();
-    
+
     fileInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file || !file.type.startsWith('image/')) return;
@@ -434,16 +486,16 @@
       };
       reader.readAsDataURL(file);
     };
-    
+
     qualityRange.oninput = () => {
       qualityVal.textContent = qualityRange.value + '%';
     };
-    
+
     convertBtn.onclick = async () => {
       if (!currentFile) return;
       const format = formatSelect.value;
       const quality = parseInt(qualityRange.value) / 100;
-      
+
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
@@ -457,7 +509,7 @@
               autoDownload: settingsCache.converterAutoDownload
             }
           });
-          
+
           if (response && response.ok) {
             convertBtn.textContent = '✓ Converted!';
             setTimeout(() => {
@@ -481,7 +533,7 @@
       };
       reader.readAsDataURL(currentFile);
     };
-    
+
     closeBtn.onclick = () => {
       root.remove();
       api.storage.local.set({ [CONVERTER_TOOLBAR_KEY]: false });
@@ -524,16 +576,16 @@
       sendResponse({ ok: true });
     } else if (msg.type === 'IBD_SELECT_ALL') {
       const imgs = document.querySelectorAll('img');
-      const toSelect = [];
+      const candidates = [];
       imgs.forEach(img => {
         const url = getCandidateImgUrl(img);
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
-        if (url && w >= 32 && h >= 32) toSelect.push(url);
+        if (url && w >= 32 && h >= 32) candidates.push({ url, el: img });
       });
       const current = await getSelection();
-      await setSelection([...current, ...toSelect]);
-      syncHighlights();
+      const processed = await processUrls(candidates);
+      await setSelection([...current, ...processed]);
       syncHighlights();
       sendResponse({ ok: true });
     }
@@ -550,15 +602,16 @@
       case 'selectAll':
         if (!settingsCache.enabled) return;
         const imgs = document.querySelectorAll('img');
-        const toSelect = [];
+        const candidates = [];
         imgs.forEach(img => {
           const url = getCandidateImgUrl(img);
           const w = img.naturalWidth || img.width;
           const h = img.naturalHeight || img.height;
-          if (url && w >= 32 && h >= 32) toSelect.push(url);
+          if (url && w >= 32 && h >= 32) candidates.push({ url, el: img });
         });
         const current = await getSelection();
-        await setSelection([...current, ...toSelect]);
+        const processed = await processUrls(candidates);
+        await setSelection([...current, ...processed]);
         syncHighlights();
         break;
       case 'clearSelection':

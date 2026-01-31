@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.8.2] - 2026-01-31
+
+### 🐛 Bug Fixes
+- **JSZip Loading**: Fixed JSZip import path mismatch (jszip.min.js → jszip.js) that prevented ZIP downloads
+- **Canvas Fallback**: Added OffscreenCanvas availability check with proper error handling for better compatibility
+- **Download Stability**: Improved error handling in download flow to prevent silent failures
+
+### 🔧 Technical
+- Enhanced error messages for canvas operations
+- Better fallback mechanisms for unsupported browser features
+- Improved background script reliability
+
+---
+
+## [1.8.1] - 2026-01-25
+
+### 🔧 Firefox Add-ons Compliance
+- **JSZip Update**: Replaced minified `jszip.min.js` with unminified `jszip.js` for Mozilla Add-ons compliance
+- **Code Transparency**: All code now fully readable for Mozilla reviewers
+- **No Functionality Changes**: All features work exactly as in v1.8.0
+
+---
+
 ## [1.8.0] - 2026-01-25
 
 ### ✨ New Features

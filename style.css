@@ -948,7 +948,7 @@ img[data-ibd-selected] {
 #ibd-converter-toolbar-v1 {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: 80px;
   z-index: 999999;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }

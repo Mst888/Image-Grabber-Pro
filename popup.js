@@ -123,7 +123,7 @@
     if (!LANGUAGES || !LANGUAGES[lang]) return;
     currentLanguage = lang;
     const translations = LANGUAGES[lang].translations;
-    
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (translations[key]) {
@@ -275,7 +275,7 @@
       if (els.converterQualityValue) els.converterQualityValue.textContent = els.converterQuality.value;
     }
     if (els.converterAutoDownloadToggle) els.converterAutoDownloadToggle.checked = stored[CONVERTER_AUTO_DOWNLOAD_KEY] !== false;
-    
+
     const lang = stored[LANGUAGE_KEY] || 'en';
     if (els.languageSelect) els.languageSelect.value = lang;
     applyLanguage(lang);
@@ -469,6 +469,8 @@
       ASPECT_RATIO_KEY, CUSTOM_RATIO_W_KEY, CUSTOM_RATIO_H_KEY, CROP_MODE_KEY
     ]);
 
+    console.log('IBD DEBUG: requestDownload settings:', settings);
+
     const tab = (await api.tabs.query({ active: true, currentWindow: true }))[0];
     const pageTitle = (tab && tab.title) ? tab.title.substring(0, 50).replace(/[\\/:*?"<>|]/g, '_') : 'Images';
     const site = (tab && tab.url) ? new URL(tab.url).hostname : 'any';
@@ -495,8 +497,11 @@
       site
     };
 
+    console.log('IBD DEBUG: Sending payload to background:', payload);
+
     try {
       const res = await api.runtime.sendMessage({ type: 'IBD_DOWNLOAD_SELECTED', payload });
+      console.log('IBD DEBUG: Response from background:', res);
       if (res && res.ok) {
         setStatus('Downloads started!');
         setTimeout(() => {
@@ -504,7 +509,8 @@
           if (!els.stayOpenToggle?.checked) window.close();
         }, 1500);
       } else if (res && res.failures) {
-        setStatus(`Failed to download ${res.failures.length} images.`, true);
+        const firstErr = res.failures[0]?.error || 'Unknown error';
+        setStatus(`Failed to download ${res.failures.length} images. (Error: ${firstErr})`, true);
       } else {
         setStatus('Error: ' + (res?.error || 'Unknown error'), true);
       }
@@ -671,7 +677,7 @@
     els.converterQuality.onchange = () => saveSetting(CONVERTER_QUALITY_KEY, Number(els.converterQuality.value));
   }
   if (els.converterAutoDownloadToggle) els.converterAutoDownloadToggle.onchange = () => saveSetting(CONVERTER_AUTO_DOWNLOAD_KEY, els.converterAutoDownloadToggle.checked);
-  
+
   if (els.languageSelect) {
     els.languageSelect.onchange = () => {
       const lang = els.languageSelect.value;

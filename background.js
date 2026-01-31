@@ -4,7 +4,7 @@
   // Load JSZip for Firefox
   try {
     if (typeof JSZip === 'undefined' && typeof importScripts !== 'undefined') {
-      importScripts('jszip.min.js');
+      importScripts('jszip.js');
     }
   } catch (e) {
     console.warn('JSZip could not be pre-loaded:', e);
@@ -33,7 +33,7 @@
   function isValidHttpUrl(url) {
     try {
       const u = new URL(url);
-      return u.protocol === 'http:' || u.protocol === 'https:';
+      return u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'data:' || u.protocol === 'blob:';
     } catch (_) { return false; }
   }
 
@@ -61,12 +61,54 @@
   }
 
   async function fetchAsBlob(url, timeoutMs) {
+    // 1. Handle Data URLs manually (avoids fetch overhead and protocol blocks)
+    if (url.startsWith('data:')) {
+      try {
+        const parts = url.split(',');
+        if (parts.length < 2) throw new Error('Invalid Data URL');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], { type: mime });
+      } catch (e) {
+        console.error('IBD DEBUG: Data URL parse error:', e);
+        throw new Error('Failed to parse image data');
+      }
+    }
+
+    // 2. Try Fetch API
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_FETCH_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal });
-      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
-      return await res.blob();
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      if (res.ok) return await res.blob();
+      throw new Error(`Fetch failed (${res.status})`);
+    } catch (err) {
+      console.warn('IBD DEBUG: Fetch failed, trying XHR fallback for:', url, err.message);
+
+      // 3. XHR Fallback (Sometimes more privileged in Firefox extensions)
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'blob';
+        xhr.timeout = timeoutMs || DEFAULT_FETCH_TIMEOUT_MS;
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
+          else reject(new Error(`XHR failed (${xhr.status})`));
+        };
+
+        xhr.onerror = () => {
+          let msg = 'NetworkError (Check CORS/CSP or Origin)';
+          if (url.startsWith('blob:')) msg = 'Blob access denied (Origin mismatch)';
+          reject(new Error(msg));
+        };
+
+        xhr.ontimeout = () => reject(new Error('Timeout / Aborted'));
+        xhr.send();
+      });
     } finally { clearTimeout(timeout); }
   }
 
@@ -107,8 +149,20 @@
         }
       }
 
-      const canvas = new OffscreenCanvas(targetW, targetH);
-      const ctx = canvas.getContext('2d', { alpha: format !== 'jpeg' });
+      // Try OffscreenCanvas first, fallback to regular canvas
+      let canvas, ctx;
+      try {
+        if (typeof OffscreenCanvas !== 'undefined') {
+          canvas = new OffscreenCanvas(targetW, targetH);
+          ctx = canvas.getContext('2d', { alpha: format !== 'jpeg' });
+        } else {
+          throw new Error('OffscreenCanvas not available');
+        }
+      } catch (offscreenError) {
+        // Fallback to regular canvas (this shouldn't normally happen in service worker, but just in case)
+        console.warn('OffscreenCanvas not available, this may cause issues:', offscreenError);
+        throw new Error('Canvas operations not available in this context. Please try normal download instead of format conversion.');
+      }
 
       if (aspectRatio && aspectRatio !== 'original' && cropMode === 'fill') {
         const sourceW = targetW;
@@ -159,10 +213,17 @@
     } = payload;
 
     const uniqueUrls = Array.from(new Set(urls.filter(isValidHttpUrl)));
-    if (!uniqueUrls.length) return { ok: false, error: 'No valid URLs.' };
+    console.log('IBD DEBUG: uniqueUrls count:', uniqueUrls.length);
+    if (!uniqueUrls.length) {
+      console.warn('IBD DEBUG: No valid URLs found from:', urls.length, 'total urls');
+      return { ok: false, error: 'No valid URLs selected (only http, https, data and blob are supported).' };
+    }
 
     const batchKey = uniqueUrls.join('|');
-    if (inFlight.has(batchKey)) return { ok: false, error: 'Download in progress.' };
+    if (inFlight.has(batchKey)) {
+      console.warn('IBD DEBUG: Download already in flight.');
+      return { ok: false, error: 'Download is already in progress.' };
+    }
     inFlight.add(batchKey);
 
     const failures = [];
@@ -170,6 +231,7 @@
     let finalQuality = quality;
     if (isLowPerf && uniqueUrls.length > 20) finalQuality = Math.max(50, quality - 20);
 
+    console.log('IBD DEBUG: Starting download. zipBundle:', zipBundle, 'JSZip exists:', typeof JSZip !== 'undefined');
     try {
       if (zipBundle && typeof JSZip !== 'undefined') {
         const zip = new JSZip();
@@ -182,39 +244,91 @@
             const filename = generateFilename({ namingMode, customTemplate, format }, i, pageTitle, site, ext);
             zip.file(filename, processed);
           } catch (err) {
+            console.error('IBD DEBUG: Zip item failure:', url, err);
             failures.push({ url, error: err.message });
           }
         }
         const content = await zip.generateAsync({ type: 'blob' });
         const zipName = (folderName || pageTitle || 'images') + '.zip';
-        await api.downloads.download({
-          url: URL.createObjectURL(content),
-          filename: zipName.replace(/[\\/:*?"<>|]/g, '_'),
-          saveAs: downloadLocation === 'ask'
-        });
+        console.log('IBD DEBUG: Zip generated, size:', content.size);
+
+        const blobUrl = URL.createObjectURL(content);
+        try {
+          await api.downloads.download({
+            url: blobUrl,
+            filename: zipName.replace(/[\\/:*?"<>|]/g, '_'),
+            saveAs: downloadLocation === 'ask'
+          });
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+        }
       } else {
         // Normal sequential download
         for (let i = 0; i < uniqueUrls.length; i += batchSize) {
           const chunk = uniqueUrls.slice(i, i + batchSize);
           await Promise.all(chunk.map(async (url, idx) => {
             const globalIdx = i + idx;
+            const ext = format === 'original' ? (url.split('.').pop().split(/[?#]/)[0] || 'jpg') : (format === 'jpeg' ? 'jpg' : format);
+            const filename = generateFilename({ namingMode, customTemplate, format }, globalIdx, pageTitle, site, ext);
+            const finalPath = folderName ? `${folderName.replace(/[\\/:*?"<>|]/g, '_')}/${filename}` : filename;
+            let processed = null;
             try {
-              const blob = await fetchAsBlob(url);
-              const processed = await convertToFormat(blob, format, finalQuality, aspectRatio, cropMode, customRatioW, customRatioH);
-              const ext = format === 'original' ? (url.split('.').pop().split(/[?#]/)[0] || 'jpg') : (format === 'jpeg' ? 'jpg' : format);
-              const filename = generateFilename({ namingMode, customTemplate, format }, globalIdx, pageTitle, site, ext);
+              // If no conversion is needed, we prefer a more direct approach if fetch fails
+              const needsConversion = format !== 'original' || aspectRatio !== 'original';
 
-              const objectUrl = URL.createObjectURL(processed);
-              const finalPath = folderName ? `${folderName.replace(/[\\/:*?"<>|]/g, '_')}/${filename}` : filename;
-              await api.downloads.download({
-                url: objectUrl,
-                filename: finalPath,
-                saveAs: downloadLocation === 'ask',
-                conflictAction: 'uniquify'
-              });
-              setTimeout(() => URL.revokeObjectURL(objectUrl), 15000);
+              try {
+                const blob = await fetchAsBlob(url);
+                processed = await convertToFormat(blob, format, finalQuality, aspectRatio, cropMode, customRatioW, customRatioH);
+              } catch (fetchErr) {
+                console.warn('IBD DEBUG: Fetch failed, checking fallback for:', url, fetchErr);
+                // Fallback: If no processing is needed, use direct URL download
+                if (!needsConversion && (url.startsWith('http') || url.startsWith('https'))) {
+                  console.log('IBD DEBUG: Fallback to direct URL download for:', url);
+                  await api.downloads.download({
+                    url: url,
+                    filename: finalPath,
+                    saveAs: downloadLocation === 'ask',
+                    conflictAction: 'uniquify'
+                  });
+                  return; // Item handled by direct download
+                } else {
+                  throw fetchErr; // Re-throw if fallback not possible
+                }
+              }
+
+              if (processed) {
+                const blobUrl = URL.createObjectURL(processed);
+                try {
+                  await api.downloads.download({
+                    url: blobUrl,
+                    filename: finalPath,
+                    saveAs: downloadLocation === 'ask',
+                    conflictAction: 'uniquify'
+                  });
+                } finally {
+                  setTimeout(() => URL.revokeObjectURL(blobUrl), 20000 * (idx + 1));
+                }
+              }
             } catch (err) {
-              failures.push({ url, error: err.message });
+              console.error('IBD DEBUG: Item download failure:', url, err);
+              // Ultimate Fallback: Try downloading the original URL directly via browser API
+              // This bypasses CORS/CSP but means no format conversion or custom naming (might fallback to url filename)
+              if (!url.startsWith('data:') && !url.startsWith('blob:')) {
+                try {
+                  console.log('IBD DEBUG: Attempting direct download fallback for:', url);
+                  await api.downloads.download({
+                    url: url,
+                    saveAs: false // Don't annoy user with save as for fallback
+                  });
+                  // Consider it a pseudo-success or at least handled
+                  return;
+                } catch (fallbackErr) {
+                  console.error('IBD DEBUG: Direct download fallback also failed:', fallbackErr);
+                  failures.push({ url, error: err.message + ' (Fallback failed: ' + fallbackErr.message + ')' });
+                }
+              } else {
+                failures.push({ url, error: err.message });
+              }
             }
           }));
           if (i + batchSize < uniqueUrls.length && downloadDelay > 0) {
@@ -226,6 +340,7 @@
       await api.storage.local.set({ [STORAGE_KEY]: [] });
       return failures.length ? { ok: false, failures } : { ok: true };
     } catch (err) {
+      console.error('IBD DEBUG: Global download error:', err);
       return { ok: false, error: err.message };
     } finally {
       inFlight.delete(batchKey);
@@ -282,16 +397,16 @@
       (async () => {
         try {
           const { dataUrl, format, quality, filename, autoDownload } = msg.payload;
-          
+
           const response = await fetch(dataUrl);
           const blob = await response.blob();
-          
+
           const convertedBlob = await convertImageFormat(blob, format, quality);
-          
+
           const originalName = filename.replace(/\.[^/.]+$/, '');
           const newExt = format === 'jpeg' ? 'jpg' : format;
           const newFilename = `${originalName}_converted.${newExt}`;
-          
+
           if (autoDownload) {
             const blobUrl = URL.createObjectURL(convertedBlob);
             await api.downloads.download({
@@ -301,7 +416,7 @@
             });
             setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
           }
-          
+
           sendResponse({ ok: true, filename: newFilename });
         } catch (error) {
           console.error('Conversion error:', error);
@@ -316,18 +431,18 @@
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(blob);
-      
+
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
           canvas.height = img.height;
-          
+
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0);
-          
+
           const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'png' ? 'image/png' : 'image/webp';
-          
+
           canvas.toBlob((convertedBlob) => {
             URL.revokeObjectURL(url);
             if (convertedBlob) {
@@ -341,12 +456,12 @@
           reject(error);
         }
       };
-      
+
       img.onerror = () => {
         URL.revokeObjectURL(url);
         reject(new Error('Failed to load image'));
       };
-      
+
       img.src = url;
     });
   }
